@@ -19,6 +19,7 @@
     "**/language.ts",
     "**/package.json",
     "**/*.md",
+    "**/ui/**",
     "eslint.config.js"
   ]
 }
