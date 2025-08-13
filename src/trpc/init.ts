@@ -1,5 +1,5 @@
 import { auth } from '@clerk/nextjs/server'
-import { initTRPC } from '@trpc/server'
+import { initTRPC, TRPCError } from '@trpc/server'
 import { cache } from 'react'
 import superjson from 'superjson'
 
@@ -8,7 +8,7 @@ export const createTRPCContext = cache(async () => {
    * @see: https://trpc.io/docs/server/context
    */
   const { userId } = await auth()
-  return { clerkId: userId }
+  return { clerkUserId: userId }
 })
 
 export type Context = Awaited<ReturnType<typeof createTRPCContext>>
@@ -27,3 +27,15 @@ const t = initTRPC.context<Context>().create({
 export const createTRPCRouter = t.router
 export const createCallerFactory = t.createCallerFactory
 export const baseProcedure = t.procedure
+export const protectedProcedure = t.procedure.use(async function isAuthed(opts) {
+  const { ctx } = opts
+  if (!ctx.clerkUserId) {
+    throw new TRPCError({ code: 'UNAUTHORIZED' })
+  }
+
+  return opts.next({
+    ctx: {
+      ...ctx,
+    },
+  })
+})
