@@ -14,3 +14,15 @@ export const users = pgTable(
     uniqueIndex('clerk_id_idx').on(t.clerkId), // 给 clerkId 建唯一索引（命名）
   ]
 )
+
+export const categories = pgTable(
+  'categories',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    description: text('description'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  t => [uniqueIndex('name').on(t.name)]
+)
