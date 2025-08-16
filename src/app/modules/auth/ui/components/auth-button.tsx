@@ -11,7 +11,7 @@ export const AuthButtons = () => {
       <SignedIn>
         <UserButton>
           <UserButton.MenuItems>
-            <UserButton.Link href="/studio" label="Studio" labelIcon={<ClapperboardIcon />} />
+            <UserButton.Link href="/studio" label="工作空间" labelIcon={<ClapperboardIcon className="size-4" />} />
           </UserButton.MenuItems>
         </UserButton>
       </SignedIn>

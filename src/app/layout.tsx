@@ -1,5 +1,6 @@
 import './globals.css'
 
+import { zhCN } from '@clerk/localizations'
 import { ClerkProvider } from '@clerk/nextjs'
 import type { Metadata } from 'next'
 import { Noto_Sans_SC } from 'next/font/google'
@@ -23,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider localization={zhCN}>
       <html lang="en">
         <body className={notoSansSC.className}>
           <TRPCProvider>{children}</TRPCProvider>
