@@ -1,4 +1,4 @@
-import { HomeView } from '@/app/modules/home/ui/view/home-view'
+import { HomeView } from '@/modules/home/ui/view/home-view'
 import { HydrateClient, trpc } from '@/trpc/server'
 export const dynamic = 'force-dynamic'
 

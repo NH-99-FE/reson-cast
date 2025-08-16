@@ -1,6 +1,6 @@
 import React from 'react'
 
-import { StudioLayout } from '@/app/modules/studio/ui/layouts/Studio-layout'
+import { StudioLayout } from '@/modules/studio/ui/layouts/Studio-layout'
 
 interface LayoutProps {
   children: React.ReactNode

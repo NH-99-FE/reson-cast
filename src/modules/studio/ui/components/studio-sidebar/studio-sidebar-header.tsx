@@ -1,9 +1,9 @@
 import { useUser } from '@clerk/nextjs'
 import Link from 'next/link'
 
-import { UserAvatar } from '@/app/modules/studio/ui/components/user-avatar'
 import { SidebarHeader, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
+import { UserAvatar } from '@/modules/studio/ui/components/user-avatar'
 
 const StudioSidebarHeader = () => {
   const { user } = useUser()

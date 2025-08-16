@@ -19,7 +19,7 @@ export const StudioSidebar = () => {
             <StudioSidebarHeader />
             <SidebarMenuItem>
               <SidebarMenuButton isActive={pathname === '/studio'} tooltip="视频内容" asChild>
-                <Link href="/">
+                <Link href="/studio">
                   <VideoIcon className="size-5" />
                   <span className="text-sm">视频内容</span>
                 </Link>
