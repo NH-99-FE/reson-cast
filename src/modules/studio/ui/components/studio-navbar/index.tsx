@@ -8,7 +8,7 @@ import StudioUploadModal from '../studio-upload-modal'
 
 export const StudioNavbar = () => {
   return (
-    <nav className="fixed top-0 right-0 left-0 z-50 flex h-16 items-center border-b px-2 pr-5 shadow-md">
+    <nav className="fixed top-0 right-0 left-0 z-50 flex h-16 items-center border-b bg-background px-2 pr-5 shadow-md">
       <div className="flex w-full items-center gap-4">
         {/*菜单和logo*/}
         <div className="flex flex-shrink-0 items-center">
