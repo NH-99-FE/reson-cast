@@ -5,6 +5,7 @@ import { ClerkProvider } from '@clerk/nextjs'
 import type { Metadata } from 'next'
 import { Noto_Sans_SC } from 'next/font/google'
 
+import { Toaster } from '@/components/ui/sonner'
 import { TRPCProvider } from '@/trpc/client'
 
 export const metadata: Metadata = {
@@ -27,7 +28,10 @@ export default function RootLayout({
     <ClerkProvider localization={zhCN}>
       <html lang="en">
         <body className={notoSansSC.className}>
-          <TRPCProvider>{children}</TRPCProvider>
+          <TRPCProvider>
+            <Toaster />
+            {children}
+          </TRPCProvider>
         </body>
       </html>
     </ClerkProvider>
