@@ -19,7 +19,7 @@ const StudioUploadModal = () => {
   })
   return (
     <>
-      <ResponsiveModal title="上传一个视频" open={!!create.data?.url} onOpenChange={() => create.reset()}>
+      <ResponsiveModal title="上传视频" open={!!create.data?.url} onOpenChange={() => create.reset()}>
         {create.data?.url ? <StudioUploader endpoint={create.data.url} onSuccess={() => {}} /> : <Loader2Icon />}
       </ResponsiveModal>
       <Button variant="secondary" onClick={() => create.mutate()} disabled={create.isPending}>

@@ -47,17 +47,17 @@ const VideosSectionSuspense = () => {
             {videos.pages
               .flatMap(page => page.items)
               .map(video => (
-                <Link href={`/studio/videos/${video.id}`} key={video.id} legacyBehavior>
-                  <TableRow className="cursor-pointer">
-                    <TableCell>{video.title}</TableCell>
-                    <TableCell>{video.title}</TableCell>
-                    <TableCell>{video.title}</TableCell>
-                    <TableCell>{video.title}</TableCell>
-                    <TableCell>{video.title}</TableCell>
-                    <TableCell>{video.title}</TableCell>
-                    <TableCell>{video.title}</TableCell>
-                  </TableRow>
-                </Link>
+                <TableRow key={video.id} className="cursor-pointer">
+                  <TableCell>
+                    <Link href={`/studio/videos/${video.id}`}>{video.title}</Link>
+                  </TableCell>
+                  <TableCell>{video.title}</TableCell>
+                  <TableCell>{video.title}</TableCell>
+                  <TableCell>{video.title}</TableCell>
+                  <TableCell>{video.title}</TableCell>
+                  <TableCell>{video.title}</TableCell>
+                  <TableCell>{video.title}</TableCell>
+                </TableRow>
               ))}
           </TableBody>
         </Table>
