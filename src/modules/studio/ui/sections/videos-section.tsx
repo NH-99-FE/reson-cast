@@ -7,6 +7,7 @@ import { Suspense } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 
 import { InfiniteScroll } from '@/components/infinite-scroll'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DEFAULT_LIMIT } from '@/constants'
 import { formatVideoStatus, formatVideoVisiblity } from '@/lib/utils'
@@ -15,7 +16,7 @@ import { trpc } from '@/trpc/client'
 
 export const VideosSection = () => {
   return (
-    <Suspense fallback={<p>加载中...</p>}>
+    <Suspense fallback={<VideosSectionSkeleton />}>
       <ErrorBoundary fallback={<p>出错了...</p>}>
         <VideosSectionSuspense />
       </ErrorBoundary>
@@ -43,8 +44,8 @@ const VideosSectionSuspense = () => {
               <TableHead>状态</TableHead>
               <TableHead>日期</TableHead>
               <TableHead className="text-right">浏览量</TableHead>
-              <TableHead className="text-right">评论</TableHead>
-              <TableHead className="pr-6 text-right">点赞</TableHead>
+              <TableHead className="text-right">评论量</TableHead>
+              <TableHead className="pr-6 text-right">点赞数</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -52,7 +53,7 @@ const VideosSectionSuspense = () => {
               .flatMap(page => page.items)
               .map(video => (
                 <TableRow key={video.id} className="cursor-pointer">
-                  <TableCell>
+                  <TableCell className="pl-6">
                     <div className="flex items-center gap-4">
                       <div className="relative aspect-video w-36 shrink-0">
                         <Link href={`/studio/videos/${video.id}`}>
@@ -78,15 +79,68 @@ const VideosSectionSuspense = () => {
                   </TableCell>
                   <TableCell>{formatVideoStatus(video.muxStatus || 'error')}</TableCell>
                   <TableCell className="truncate text-sm">{format(new Date(video.createdAt), 'd MMM yyyy')}</TableCell>
-                  <TableCell>{video.title}</TableCell>
-                  <TableCell>{video.title}</TableCell>
-                  <TableCell>{video.title}</TableCell>
+                  <TableCell className="text-right text-sm">999</TableCell>
+                  <TableCell className="text-right text-sm">1000</TableCell>
+                  <TableCell className="pr-6 text-right text-sm">1000</TableCell>
                 </TableRow>
               ))}
           </TableBody>
         </Table>
       </div>
       <InfiniteScroll hasNextPage={query.hasNextPage} isFetchingNextPage={query.isFetchingNextPage} fetchNextPage={query.fetchNextPage} />
+    </div>
+  )
+}
+
+const VideosSectionSkeleton = () => {
+  return (
+    <div className="border-y">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[510px] pl-6">视频</TableHead>
+            <TableHead>谁可以看</TableHead>
+            <TableHead>状态</TableHead>
+            <TableHead>日期</TableHead>
+            <TableHead className="text-right">浏览量</TableHead>
+            <TableHead className="text-right">评论量</TableHead>
+            <TableHead className="pr-6 text-right">点赞数</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <TableRow key={index}>
+              <TableCell className="pl-6">
+                <div className="flex items-center gap-4">
+                  <Skeleton className="h-20 w-36 rounded-xl" />
+                  <div className="flex flex-col gap-2">
+                    <Skeleton className="h-4 w-[100px]" />
+                    <Skeleton className="h-3 w-[150px]" />
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-4 w-16" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-4 w-10" />
+              </TableCell>
+              <TableCell>
+                <Skeleton className="h-4 w-18" />
+              </TableCell>
+              <TableCell className="text-right">
+                <Skeleton className="ml-auto h-4 w-10" />
+              </TableCell>
+              <TableCell className="text-right">
+                <Skeleton className="ml-auto h-4 w-10" />
+              </TableCell>
+              <TableCell className="pr-6 text-right">
+                <Skeleton className="ml-auto h-4 w-10" />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   )
 }

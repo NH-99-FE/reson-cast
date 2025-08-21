@@ -17,6 +17,7 @@ export const formatVideoStatus = (status: string): string => {
     preparing: '处理中',
     waiting: '等待中',
     error: '状态错误',
+    no_subtitles: '无字幕',
   }
 
   const lowerStatus = status.toLowerCase().trim()
