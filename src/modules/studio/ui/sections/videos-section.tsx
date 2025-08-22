@@ -65,9 +65,9 @@ const VideosSectionSuspense = () => {
                           />
                         </Link>
                       </div>
-                      <div className="flex flex-col gap-y-1 overflow-hidden">
-                        <span className="line-clamp-1 text-sm">{video.title}</span>
-                        <span className="line-clamp-1 text-xs text-muted-foreground">{video.description || '还没有介绍'}</span>
+                      <div className="flex max-w-[300px] flex-col gap-y-1">
+                        <span className="truncate text-sm">{video.title}</span>
+                        <span className="truncate text-xs text-muted-foreground">{video.description || '还没有介绍'}</span>
                       </div>
                     </div>
                   </TableCell>

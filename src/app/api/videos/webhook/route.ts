@@ -7,6 +7,7 @@ import {
 } from '@mux/mux-node/resources/webhooks'
 import { eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
+import { UTApi } from 'uploadthing/server'
 
 import { db } from '@/db'
 import { videos } from '@/db/schema'
@@ -71,14 +72,45 @@ export async function POST(request: Request) {
         return new Response('没有playbackId', { status: 400 })
       }
 
-      const thumbnailUrl = `https://image.mux.com/${playbackId}/thumbnail.jpg`
-      const previewUrl = `https://image.mux.com/${playbackId}/animated.gif`
+      // 检查视频是否已经处理过，避免重复处理
+      const [existingVideo] = await db.select().from(videos).where(eq(videos.muxUploadId, data.upload_id))
+
+      if (!existingVideo) {
+        return new Response('视频不存在', { status: 404 })
+      }
+
+      // 如果缩略图和预览图以及上传，跳过上传步骤
+      if (existingVideo.thumbnailKey && existingVideo.previewKey && existingVideo.muxStatus === 'ready') {
+        return new Response('视频已处理', { status: 200 })
+      }
+
+      const tempThumbnailUrl = `https://image.mux.com/${playbackId}/thumbnail.jpg`
+      const tempPreviewUrl = `https://image.mux.com/${playbackId}/animated.gif`
 
       const duration = data.duration ? Math.round(data.duration * 1000) : 0
 
+      const utapi = new UTApi()
+      const [uploadedThumbnail, uploadedPreview] = await utapi.uploadFilesFromUrl([tempThumbnailUrl, tempPreviewUrl])
+
+      if (!uploadedThumbnail.data || !uploadedPreview.data) {
+        return new Response('无法上传缩略图/预览动态图', { status: 500 })
+      }
+
+      const { key: thumbnailKey, ufsUrl: thumbnailUrl } = uploadedThumbnail.data
+      const { key: previewKey, ufsUrl: previewUrl } = uploadedPreview.data
+
       await db
         .update(videos)
-        .set({ muxStatus: data.status, muxPlaybackId: playbackId, muxAssetId: data.id, thumbnailUrl, previewUrl, duration })
+        .set({
+          muxStatus: data.status,
+          muxPlaybackId: playbackId,
+          muxAssetId: data.id,
+          thumbnailUrl,
+          thumbnailKey,
+          previewUrl,
+          previewKey,
+          duration,
+        })
         .where(eq(videos.muxUploadId, data.upload_id))
       break
     }
