@@ -3,3 +3,6 @@ uploadthing
 utapi
 SILICONDLOW
 Qwen
+Kwai
+Kolors
+uploadtemp

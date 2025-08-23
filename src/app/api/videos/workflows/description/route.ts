@@ -43,14 +43,14 @@ export const { POST } = serve(async context => {
   const transcript = await context.run('get-transcript', async () => {
     const trackUrl = `https://stream.mux.com/${video.muxPlaybackId}/text/${video.muxTrackId}.txt`
     const response = await fetch(trackUrl)
-    const text = response.text()
+    const text = await response.text()
     if (!text) {
       throw new Error('Bad request')
     }
     return text
   })
 
-  const { body } = await context.api.openai.call('generated-description', {
+  const { body } = await context.api.openai.call<{ choices: Array<{ message: { content: string } }> }>('generated-description', {
     baseURL: 'https://api.siliconflow.cn/v1/chat/completions',
     token: process.env.SILICONDLOW_API_KEY!,
     operation: 'chat.completions.create',
@@ -69,7 +69,7 @@ export const { POST } = serve(async context => {
     },
   })
 
-  const description = body.choices[0]?.message?.content
+  const description = body.choices[0].message.content
   if (!description) {
     throw new Error('Bad request')
   }

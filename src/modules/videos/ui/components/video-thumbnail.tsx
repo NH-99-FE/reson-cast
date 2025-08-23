@@ -22,6 +22,9 @@ export const VideoThumbnail = ({ title, imageUrl, previewUrl, duration }: VideoT
           fill
           className="h-full w-full object-cover group-hover:opacity-0"
           unoptimized
+          onError={e => {
+            e.currentTarget.src = THUMBNAIL_FALLBACK
+          }}
         />
         {/*缩略图*/}
         <Image

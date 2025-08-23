@@ -9,10 +9,8 @@ import {
   Loader2Icon,
   LockIcon,
   MoreVerticalIcon,
-  RotateCcw,
   RotateCcwIcon,
   SaveIcon,
-  Sparkles,
   SparklesIcon,
   TrashIcon,
 } from 'lucide-react'
@@ -30,9 +28,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { videoUpdateSchema } from '@/db/schema'
 import { formatVideoStatus } from '@/lib/utils'
+import { ThumbnailGenerateModal } from '@/modules/studio/ui/components/thumbnail-generate-modal'
 import { ThumbnailUploadModal } from '@/modules/studio/ui/components/thumbnail-upload-modal'
 import { THUMBNAIL_FALLBACK } from '@/modules/videos/constants'
 import { VideoPlayer } from '@/modules/videos/ui/components/video-player'
@@ -53,7 +53,60 @@ export const FormSection = ({ videoId }: FormSectionProps) => {
 }
 
 const FormSectionSkeleton = () => {
-  return <p>加载中...</p>
+  return (
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <div className="space-y-2">
+          <Skeleton className="h-7 w-32" />
+          <Skeleton className="h-4 w-40" />
+        </div>
+        <Skeleton className="mr-10 h-9 w-24" />
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <div className="space-y-8 lg:col-span-3">
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-16" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-[160px] w-full" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-24" />
+            <Skeleton className="h-[84px] w-[153px]" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-10 w-20" />
+          </div>
+        </div>
+        <div className="flex flex-col space-y-2 lg:col-span-2">
+          <div className="flex flex-col gap-4 overflow-hidden rounded-xl bg-[#F9F9F9]">
+            <Skeleton className="aspect-video" />
+            <div className="space-y-6 p-4">
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-full" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-18" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-18" />
+              </div>
+            </div>
+          </div>
+          <div className="mt-8 space-y-2">
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
@@ -61,6 +114,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
   const utils = trpc.useUtils()
 
   const [thumbnailModalOpen, setThumbnailModalOpen] = useState<boolean>(false)
+  const [thumbnailGenerateModalOpen, setThumbnailGenerateModalOpen] = useState<boolean>(false)
 
   const [video] = trpc.studio.getOne.useSuspenseQuery({ id: videoId })
   const [categories] = trpc.categories.getMany.useSuspenseQuery()
@@ -122,16 +176,6 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
     },
   })
 
-  // AI生成缩略图
-  const generateThumbnail = trpc.videos.generateThumbnail.useMutation({
-    onSuccess: () => {
-      toast.success('AI开始在后台处理')
-    },
-    onError: () => {
-      toast.error('AI生成失败')
-    },
-  })
-
   const form = useForm<z.infer<typeof videoUpdateSchema>>({
     resolver: zodResolver(videoUpdateSchema),
     defaultValues: video,
@@ -153,6 +197,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
   }
   return (
     <>
+      <ThumbnailGenerateModal videoId={videoId} open={thumbnailGenerateModalOpen} onOpenChange={setThumbnailGenerateModalOpen} />
       <ThumbnailUploadModal open={thumbnailModalOpen} onOpenChange={setThumbnailModalOpen} videoId={videoId} />
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -162,7 +207,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
               <p className="text-xs text-muted-foreground">管理你的视频</p>
             </div>
             <div className="flex items-center gap-x-2">
-              <Button type="submit" variant="outline" disabled={update.isPending}>
+              <Button type="submit" variant="outline" disabled={update.isPending || !form.formState.isDirty}>
                 {update.isPending ? <Loader2Icon className="w-8 animate-spin" /> : <SaveIcon />}
                 保存
               </Button>
@@ -227,7 +272,11 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                           onClick={() => generateDescription.mutate({ id: videoId })}
                           disabled={generateDescription.isPending || !video.muxTrackId}
                         >
-                          {generateTitle.isPending ? <Loader2Icon className="size-3 animate-spin" /> : <SparklesIcon className="size-3" />}
+                          {generateDescription.isPending ? (
+                            <Loader2Icon className="size-3 animate-spin" />
+                          ) : (
+                            <SparklesIcon className="size-3" />
+                          )}
                         </Button>
                       </div>
                     </FormLabel>
@@ -269,7 +318,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                               <ImagePlusIcon className="mr-2 size-4" />
                               <span>修改</span>
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => generateThumbnail.mutate({ id: videoId })}>
+                            <DropdownMenuItem onClick={() => setThumbnailGenerateModalOpen(true)}>
                               <SparklesIcon className="mr-2 size-4" />
                               <span>AI生成</span>
                             </DropdownMenuItem>
