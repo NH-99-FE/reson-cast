@@ -93,13 +93,42 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
   const restoreThumbnail = trpc.videos.restoreThumbnail.useMutation({
     onSuccess: () => {
       // 旧缓存失效
-
       utils.studio.getMany.invalidate()
       utils.studio.getOne.invalidate({ id: videoId })
       toast.success('恢复成功')
     },
     onError: () => {
       toast.error('恢复失败')
+    },
+  })
+
+  // AI生成标题
+  const generateTitle = trpc.videos.generateTitle.useMutation({
+    onSuccess: () => {
+      toast.success('AI开始在后台处理')
+    },
+    onError: () => {
+      toast.error('AI生成失败')
+    },
+  })
+
+  // AI生成简介
+  const generateDescription = trpc.videos.generateDescription.useMutation({
+    onSuccess: () => {
+      toast.success('AI开始在后台处理')
+    },
+    onError: () => {
+      toast.error('AI生成失败')
+    },
+  })
+
+  // AI生成缩略图
+  const generateThumbnail = trpc.videos.generateThumbnail.useMutation({
+    onSuccess: () => {
+      toast.success('AI开始在后台处理')
+    },
+    onError: () => {
+      toast.error('AI生成失败')
     },
   })
 
@@ -160,7 +189,21 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                 name="title"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>标题</FormLabel>
+                    <FormLabel>
+                      <div className="flex items-center gap-x-2">
+                        标题
+                        <Button
+                          variant="ghost"
+                          type="button"
+                          size="icon"
+                          className="size-6 rounded-full"
+                          onClick={() => generateTitle.mutate({ id: videoId })}
+                          disabled={generateTitle.isPending || !video.muxTrackId}
+                        >
+                          {generateTitle.isPending ? <Loader2Icon className="size-3 animate-spin" /> : <SparklesIcon className="size-3" />}
+                        </Button>
+                      </div>
+                    </FormLabel>
                     <FormControl>
                       <Input {...field} placeholder="在此添加视频标题" />
                     </FormControl>
@@ -173,7 +216,21 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>简介</FormLabel>
+                    <FormLabel>
+                      <div className="flex items-center gap-x-2">
+                        简介
+                        <Button
+                          variant="ghost"
+                          type="button"
+                          size="icon"
+                          className="size-6 rounded-full"
+                          onClick={() => generateDescription.mutate({ id: videoId })}
+                          disabled={generateDescription.isPending || !video.muxTrackId}
+                        >
+                          {generateTitle.isPending ? <Loader2Icon className="size-3 animate-spin" /> : <SparklesIcon className="size-3" />}
+                        </Button>
+                      </div>
+                    </FormLabel>
                     <FormControl>
                       <Textarea
                         {...field}
@@ -212,7 +269,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                               <ImagePlusIcon className="mr-2 size-4" />
                               <span>修改</span>
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => generateThumbnail.mutate({ id: videoId })}>
                               <SparklesIcon className="mr-2 size-4" />
                               <span>AI生成</span>
                             </DropdownMenuItem>
