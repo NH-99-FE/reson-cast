@@ -370,7 +370,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                     <div className="flex flex-col gap-y-1">
                       <p className="text-xs text-muted-foreground">视频链接</p>
                       <div className="flex items-center gap-x-2">
-                        <Link href={`/video/${video.id}`}>
+                        <Link href={`/videos/${video.id}`}>
                           <p className="line-clamp-1 text-sm text-blue-500">{fullUrl}</p>
                         </Link>
                         <Button type="button" variant="ghost" size="icon" className={'shrink-0'} onClick={onCopy} disabled={isCopied}>
