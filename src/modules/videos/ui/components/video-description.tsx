@@ -1,5 +1,5 @@
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 
 import { cn } from '@/lib/utils'
 
@@ -14,6 +14,9 @@ interface VideoDescriptionProps {
 export const VideoDescription = ({ compactViews, compactDate, expandedViews, expandedDate, description }: VideoDescriptionProps) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
+  // 清理描述文本，移除多余的空白字符
+  const cleanDescription = description?.trim().replace(/\s+/g, ' ') || '还没有简介'
+
   return (
     <div
       onClick={() => setIsExpanded(current => !current)}
@@ -21,20 +24,20 @@ export const VideoDescription = ({ compactViews, compactDate, expandedViews, exp
     >
       <div>
         <span>{isExpanded ? expandedViews : compactViews}</span>浏览量
-        <span>{isExpanded ? expandedDate : compactDate}</span>
+        <span className="ml-4 text-muted-foreground">{isExpanded ? expandedDate : compactDate}</span>
       </div>
       <div>
-        <p className={cn('text-sm whitespace-pre-wrap', !isExpanded && 'line-clamp-1')}>{description || '还没有简介'}</p>
-        <div className="mt-4 flex items-center gap-1 text-sm font-medium">
+        <p className={cn('text-sm', !isExpanded && 'line-clamp-1')}>{cleanDescription}</p>
+        <div className="mt-2 flex items-center gap-1 text-sm font-medium">
           {!isExpanded ? (
             <>
-              显示更多
-              <ChevronUpIcon className="size-4" />
+              展开
+              <ChevronDownIcon className="size-4" />
             </>
           ) : (
             <>
-              显示更少
-              <ChevronDownIcon className="size-4" />
+              收起
+              <ChevronUpIcon className="size-4" />
             </>
           )}
         </div>

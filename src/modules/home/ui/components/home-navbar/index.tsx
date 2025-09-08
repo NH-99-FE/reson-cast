@@ -7,7 +7,7 @@ import { AuthButtons } from '@/modules/auth/ui/components/auth-button'
 import { SearchInput } from '../search-input'
 export const HomeNavbar = () => {
   return (
-    <nav className="fixed top-0 right-0 left-0 z-50 flex h-16 items-center px-2 pr-5">
+    <nav className="fixed top-0 right-0 left-0 z-50 flex h-16 items-center bg-white px-2 pr-5">
       <div className="flex w-full items-center gap-4">
         {/*菜单和logo*/}
         <div className="flex flex-shrink-0 items-center">

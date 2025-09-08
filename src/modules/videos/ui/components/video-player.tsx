@@ -1,5 +1,6 @@
 'use client'
 import MuxPlayer from '@mux/mux-player-react'
+import { useEffect, useState } from 'react'
 
 import { THUMBNAIL_FALLBACK } from '@/modules/videos/constants'
 
@@ -20,6 +21,7 @@ export const VideoPlayer = ({ playbackId, thumbnailUrl, autoPlay, onPlay }: Vide
       thumbnailTime={0}
       className="h-full w-full object-contain"
       accentColor="#FF2056"
+      onPlay={onPlay}
     />
   )
 }
