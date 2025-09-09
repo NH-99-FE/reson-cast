@@ -38,11 +38,10 @@ export const VideoReactions = ({ videoId, viewerReaction, dislikes, likes }: Vid
       // TODO:点赞列表失效
     },
     onError: err => {
-      toast.error('出错了')
-
       if (err.data?.code === 'UNAUTHORIZED') {
         clerk.openSignIn()
       }
+      toast.error('出错了')
     },
   })
 

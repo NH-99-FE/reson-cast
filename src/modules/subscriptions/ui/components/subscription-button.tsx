@@ -20,7 +20,7 @@ export const SubscriptionButton = ({ onClick, disabled, isSubscribed, className,
       onClick={onClick}
       disabled={disabled}
     >
-      {isSubscribed ? '关注' : '已关注'}
+      {isSubscribed ? '已关注' : '关注'}
     </Button>
   )
 }

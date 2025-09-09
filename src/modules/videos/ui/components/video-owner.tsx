@@ -3,6 +3,7 @@ import Link from 'next/link'
 
 import { Button } from '@/components/ui/button'
 import { UserAvatar } from '@/modules/studio/ui/components/user-avatar'
+import { useSubscriptions } from '@/modules/subscriptions/hooks/use-subscription'
 import { SubscriptionButton } from '@/modules/subscriptions/ui/components/subscription-button'
 import { UserInfo } from '@/modules/users/ui/components/user-info'
 
@@ -14,7 +15,8 @@ interface VideoOwnerProps {
 }
 
 export const VideoOwner = ({ user, videoId }: VideoOwnerProps) => {
-  const { userId: userClerkId } = useAuth()
+  const { userId: userClerkId, isLoaded } = useAuth()
+  const { onClick, isPending } = useSubscriptions({ userId: user.id, fromVideoId: videoId, isSubscribed: user.viewerSubscribed })
   return (
     <div className="flex min-w-0 items-center justify-between gap-3 sm:items-start sm:justify-start">
       <Link href={`/users/${user.id}`}>
@@ -22,7 +24,7 @@ export const VideoOwner = ({ user, videoId }: VideoOwnerProps) => {
           <UserAvatar size="lg" imageUrl={user.imageUrl} name={user.name} />
           <div className="flex min-w-0 flex-col gap-1">
             <UserInfo name={user.name} />
-            <span className="line-clamp-1 text-sm text-muted-foreground">{0}粉丝数</span>
+            <span className="line-clamp-1 text-sm text-muted-foreground">{user.subscriberCount}粉丝数</span>
           </div>
         </div>
       </Link>
@@ -31,7 +33,12 @@ export const VideoOwner = ({ user, videoId }: VideoOwnerProps) => {
           <Link href={`/studio/videos/${videoId}`}>编辑视频</Link>
         </Button>
       ) : (
-        <SubscriptionButton onClick={() => {}} disabled={false} isSubscribed={false} className="flex-none" />
+        <SubscriptionButton
+          onClick={onClick}
+          disabled={isPending || !isLoaded}
+          isSubscribed={user.viewerSubscribed}
+          className="flex-none cursor-pointer"
+        />
       )}
     </div>
   )
