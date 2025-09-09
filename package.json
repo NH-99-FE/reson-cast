@@ -15,7 +15,8 @@
     "prepare": "husky",
     "commit": "git-cz",
     "db:push": "drizzle-kit push",
-    "db:seed": "tsx src/scripts/seed-categories.ts"
+    "db:seed": "tsx src/scripts/seed-categories.ts",
+    "db:view": "drizzle-kit studio"
   },
   "config": {
     "commitizen": {
