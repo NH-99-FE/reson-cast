@@ -16,7 +16,7 @@ export const VideoView = ({ videoId }: VideoViewProps) => {
           <div className="mt-4 block xl:hidden">
             <SuggestionsSection />
           </div>
-          <CommentsSection />
+          <CommentsSection videoId={videoId} />
         </div>
         <div className="mt-4 hidden w-full shrink-1 xl:block xl:w-[380px] 2xl:w-[640px]">
           <SuggestionsSection />
