@@ -63,7 +63,11 @@ export const CommentForm = ({ videoId, onSuccess, onCancel, parentId, variant = 
   return (
     <Form {...form}>
       <form className="group flex gap-4" onSubmit={form.handleSubmit(handleSubmit)}>
-        <UserAvatar imageUrl={user?.imageUrl || '/user-placeholder.svg'} name={user?.fullName || '用户'} size="lg" />
+        <UserAvatar
+          imageUrl={user?.imageUrl || '/user-placeholder.svg'}
+          name={user?.fullName || '用户'}
+          size={variant === 'comment' ? 'lg' : 'sm'}
+        />
         <div className="flex-1">
           <FormField
             name="value"

@@ -22,7 +22,7 @@ export const AuthButtons = () => {
             className="rounded-full border-blue-500/20 px-4 py-2 font-medium text-blue-600 shadow-none hover:text-blue-500"
           >
             <UserCircleIcon />
-            登录
+            <span className="hidden sm:block">登录</span>
           </Button>
         </SignInButton>
       </SignedOut>
