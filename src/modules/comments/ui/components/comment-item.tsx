@@ -1,23 +1,32 @@
 import { useAuth, useClerk } from '@clerk/nextjs'
 import { formatDistanceToNow } from 'date-fns/formatDistanceToNow'
-import { MessageSquareIcon, MoreVerticalIcon, ThumbsDown, ThumbsDownIcon, ThumbsUpIcon, Trash2Icon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon, MessageSquareIcon, MoreVerticalIcon, ThumbsDownIcon, ThumbsUpIcon, Trash2Icon } from 'lucide-react'
 import Link from 'next/link'
+import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { CommentsGetManyOutput } from '@/modules/comments/types'
+import { CommentForm } from '@/modules/comments/ui/components/comment-form'
+import { CommentReplies } from '@/modules/comments/ui/components/comment-replies'
 import { UserAvatar } from '@/modules/studio/ui/components/user-avatar'
 import { trpc } from '@/trpc/client'
 
 interface CommentItemProps {
   comment: CommentsGetManyOutput['items'][number]
+  variant?: 'reply' | 'comment'
 }
 
-export const CommentItem = ({ comment }: CommentItemProps) => {
+export const CommentItem = ({ comment, variant = 'comment' }: CommentItemProps) => {
   const clerk = useClerk()
   const utils = trpc.useUtils()
+  const { userId: userClerkId } = useAuth()
+
+  const [isReplyOpen, setIsReplyOpen] = useState(false)
+  const [isRepliesOpen, setIsRepliesOpen] = useState(false)
+
   const remove = trpc.comments.remove.useMutation({
     onSuccess: () => {
       toast.success('删除完成')
@@ -56,7 +65,7 @@ export const CommentItem = ({ comment }: CommentItemProps) => {
     <div>
       <div className="flex gap-4">
         <Link href={`/users/${comment.userId}`}>
-          <UserAvatar imageUrl={comment.user.imageUrl} name={comment.user.name} size="lg" />
+          <UserAvatar imageUrl={comment.user.imageUrl} name={comment.user.name} size={variant === 'comment' ? 'lg' : 'sm'} />
         </Link>
         <div className="min-w-0 flex-1">
           <Link href={`/users/${comment.userId}`}>
@@ -93,30 +102,71 @@ export const CommentItem = ({ comment }: CommentItemProps) => {
               </Button>
               <span className="text-xs text-muted-foreground">{comment.dislikeCount}</span>
             </div>
+            {variant === 'comment' && (
+              <Button className="h-8" variant="ghost" size="sm" onClick={() => setIsReplyOpen(true)}>
+                回复
+              </Button>
+            )}
           </div>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="size-8">
-              <MoreVerticalIcon />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => {}}>
-              <MessageSquareIcon className="mr-2 size-4" />
-              回复
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                remove.mutate({ id: comment.id })
-              }}
-            >
-              <Trash2Icon className="mr-2 size-4" />
-              删除
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/*评论作者/视频作者具有删除权限*/}
+        {(comment.user.clerkId === userClerkId || comment.videoOwnerClerkId === userClerkId || variant === 'comment') && (
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="size-8">
+                <MoreVerticalIcon />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {variant === 'comment' && (
+                <DropdownMenuItem
+                  onClick={() => {
+                    setIsReplyOpen(true)
+                  }}
+                >
+                  <MessageSquareIcon className="mr-2 size-4" />
+                  回复
+                </DropdownMenuItem>
+              )}
+              {(comment.user.clerkId === userClerkId || comment.videoOwnerClerkId === userClerkId) && (
+                <DropdownMenuItem
+                  onClick={() => {
+                    remove.mutate({ id: comment.id })
+                  }}
+                >
+                  <Trash2Icon className="mr-2 size-4" />
+                  删除
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
+      {isReplyOpen && variant === 'comment' && (
+        <div className="mt-4 pl-14">
+          <CommentForm
+            variant="reply"
+            parentId={comment.id}
+            videoId={comment.videoId}
+            onCancel={() => setIsReplyOpen(false)}
+            onSuccess={() => {
+              setIsReplyOpen(false)
+              setIsRepliesOpen(true)
+            }}
+          />
+        </div>
+      )}
+      {comment.replyCount > 0 && variant === 'comment' && (
+        <div className="pl-14">
+          <Button className="rounded-full" variant="tertiary" size="sm" onClick={() => setIsRepliesOpen(current => !current)}>
+            {isRepliesOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
+            {comment.replyCount} 回复
+          </Button>
+        </div>
+      )}
+      {comment.replyCount > 0 && variant === 'comment' && isRepliesOpen && (
+        <CommentReplies parentId={comment.id} videoId={comment.videoId} />
+      )}
     </div>
   )
 }

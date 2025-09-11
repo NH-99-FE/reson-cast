@@ -13,16 +13,21 @@ import { trpc } from '@/trpc/client'
 
 interface CommentFormProps {
   videoId: string
+  parentId?: string
   onSuccess?: () => void
+  onCancel?: () => void
+  variant?: 'comment' | 'reply'
 }
 
-export const CommentForm = ({ videoId, onSuccess }: CommentFormProps) => {
+export const CommentForm = ({ videoId, onSuccess, onCancel, parentId, variant = 'comment' }: CommentFormProps) => {
   const { user } = useClerk()
   const utils = trpc.useUtils()
   const clerk = useClerk()
   const create = trpc.comments.create.useMutation({
     onSuccess: () => {
       utils.comments.getMany.invalidate({ videoId })
+      utils.comments.getMany.invalidate({ videoId, parentId })
+
       form.reset()
       toast.success('评论成功')
       onSuccess?.()
@@ -41,12 +46,18 @@ export const CommentForm = ({ videoId, onSuccess }: CommentFormProps) => {
     resolver: zodResolver(commentFormSchema),
     defaultValues: {
       videoId,
+      parentId,
       value: '',
     },
   })
 
   const handleSubmit = (values: z.infer<typeof commentFormSchema>) => {
     create.mutate(values)
+  }
+
+  const handleCancel = () => {
+    form.reset()
+    onCancel?.()
   }
 
   return (
@@ -59,15 +70,24 @@ export const CommentForm = ({ videoId, onSuccess }: CommentFormProps) => {
             render={({ field }) => (
               <FormItem>
                 <FormControl>
-                  <Textarea {...field} placeholder="留下你的友善评论吧" className="min-h-16 resize-none overflow-hidden bg-transparent" />
+                  <Textarea
+                    {...field}
+                    placeholder={variant === 'reply' ? '恶语伤人，请善意回复' : '留下你的友善评论吧'}
+                    className="min-h-16 resize-none overflow-hidden bg-transparent"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
           <div className="mt-2 flex justify-end gap-2">
+            {onCancel && (
+              <Button variant="ghost" type="button" onClick={handleCancel}>
+                取消
+              </Button>
+            )}
             <Button type="submit" size="sm" disabled={create.isPending}>
-              评论
+              {variant === 'reply' ? '回复' : '评论'}
             </Button>
           </div>
         </div>
