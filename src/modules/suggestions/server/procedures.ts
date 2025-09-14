@@ -44,9 +44,9 @@ export const suggestionRouter = createTRPCRouter({
         .select({
           ...getTableColumns(videos),
           user: users,
-          viewCount: db.$count(videoViews, eq(videoViews.videoId, videoId)),
-          likeCount: db.$count(videoReactions, and(eq(videoReactions.videoId, videoId), eq(videoReactions.type, 'like'))),
-          dislikeCount: db.$count(videoReactions, and(eq(videoReactions.videoId, videoId), eq(videoReactions.type, 'dislike'))),
+          viewCount: db.$count(videoViews, eq(videoViews.videoId, videos.id)),
+          likeCount: db.$count(videoReactions, and(eq(videoReactions.videoId, videos.id), eq(videoReactions.type, 'like'))),
+          dislikeCount: db.$count(videoReactions, and(eq(videoReactions.videoId, videos.id), eq(videoReactions.type, 'dislike'))),
         })
         .from(videos)
         .innerJoin(users, eq(videos.userId, users.id))
