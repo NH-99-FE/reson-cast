@@ -143,6 +143,18 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
     },
   })
 
+  const revalidate = trpc.videos.revalidate.useMutation({
+    onSuccess: () => {
+      // 旧缓存失效
+      utils.studio.getMany.invalidate()
+      utils.studio.getOne.invalidate({ id: videoId })
+      toast.success('验证成功')
+    },
+    onError: () => {
+      toast.error('验证失败')
+    },
+  })
+
   // 恢复缩略图
   const restoreThumbnail = trpc.videos.restoreThumbnail.useMutation({
     onSuccess: () => {
@@ -218,6 +230,10 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align={'end'}>
+                  <DropdownMenuItem onClick={() => revalidate.mutate({ id: videoId })}>
+                    <RotateCcwIcon className="mr-2 size-4" />
+                    <span>验证</span>
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => remove.mutate({ id: videoId })}>
                     <TrashIcon className="mr-2 size-4" />
                     <span>删除</span>
