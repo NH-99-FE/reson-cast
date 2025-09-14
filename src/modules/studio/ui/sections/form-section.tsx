@@ -30,6 +30,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { APP_URL } from '@/constants'
 import { videoUpdateSchema } from '@/db/schema'
 import { formatVideoStatus } from '@/lib/utils'
 import { ThumbnailGenerateModal } from '@/modules/studio/ui/components/thumbnail-generate-modal'
@@ -197,7 +198,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
     await update.mutate(data)
   }
 
-  const fullUrl = `${process.env.VERCEL_URL || 'http://localhost:3000'}/videos/${videoId}`
+  const fullUrl = `${APP_URL || 'http://localhost:3000'}/videos/${videoId}`
 
   const [isCopied, setIsCopied] = useState<boolean>(false)
   const onCopy = async () => {

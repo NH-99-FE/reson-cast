@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { APP_URL } from '@/constants'
 
 interface VideoMenuProps {
   videoId: string
@@ -12,7 +13,7 @@ interface VideoMenuProps {
 
 export const VideoMenu = ({ videoId, variant = 'ghost', onRemove }: VideoMenuProps) => {
   const onShare = () => {
-    const fullUrl = `${process.env.VERCEL_URL || 'http://localhost:3000'}/videos/${videoId}`
+    const fullUrl = `${APP_URL || 'http://localhost:3000'}/videos/${videoId}`
     navigator.clipboard.writeText(fullUrl)
     toast.success('链接已复制到剪贴板')
   }
