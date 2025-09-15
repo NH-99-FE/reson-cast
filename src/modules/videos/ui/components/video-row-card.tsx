@@ -26,7 +26,7 @@ const videoRowCardVariants = cva('group flex min-w-0', {
 const thumbnailVariants = cva('relative flex-none', {
   variants: {
     size: {
-      default: 'w-[38%]',
+      default: 'w-[30%]',
       compact: 'w-[168px]',
     },
   },
@@ -43,7 +43,7 @@ interface VideoRowCardProps extends VariantProps<typeof videoRowCardVariants> {
 export const VideoRowCardSkeleton = ({ size = 'default' }: VariantProps<typeof videoRowCardVariants>) => {
   return (
     <div className={videoRowCardVariants({ size })}>
-      <div className={videoRowCardVariants({ size })}>
+      <div className={thumbnailVariants({ size })}>
         <VideoThumbnailSkeleton />
       </div>
       <div className="min-w-0 flex-1">
@@ -99,19 +99,19 @@ export const VideoRowCard = ({ data, size = 'default', onRemove }: VideoRowCardP
           <Link href={`/videos/${data.id}`} className="min-w-0 flex-1">
             <h3 className={cn('line-clamp-2 font-medium', size === 'compact' ? 'text-sm' : 'text-base')}>{data.title}</h3>
             {size === 'default' && (
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-2 text-xs text-muted-foreground">
                 {compactViews} 浏览量 | {compactLikes} 点赞数
               </p>
             )}
             {size === 'default' && (
               <>
-                <div>
+                <div className="mt-2 flex items-center gap-x-2">
                   <UserAvatar size="sm" imageUrl={data.user.imageUrl} name={data.user.name} />
                   <UserInfo size="sm" name={data.user.name} />
                 </div>
                 <Tooltip>
                   <TooltipTrigger>
-                    <p className="line-clamp-2 w-fit text-start text-xs text-muted-foreground">{data.description ?? '还没有简介'}</p>
+                    <p className="mt-2 line-clamp-2 w-fit text-start text-xs text-muted-foreground">{data.description ?? '还没有简介'}</p>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" align="center" className="bg-black/70">
                     <p>来自视频简介</p>

@@ -17,7 +17,7 @@ interface ResultsSectionProps {
 
 export const ResultsSection = ({ query, categoryId }: ResultsSectionProps) => {
   return (
-    <Suspense fallback={<ResultsSectionSkeleton />}>
+    <Suspense key={`${query}-${categoryId}`} fallback={<ResultsSectionSkeleton />}>
       <ErrorBoundary fallback={<p>出错了</p>}>
         <ResultsSectionSuspense query={query} categoryId={categoryId} />
       </ErrorBoundary>
@@ -26,23 +26,19 @@ export const ResultsSection = ({ query, categoryId }: ResultsSectionProps) => {
 }
 
 const ResultsSectionSkeleton = () => {
-  const isMobile = useIsMobile()
   return (
-    <>
-      {isMobile ? (
-        <div className="flex flex-col gap-4 gap-y-10">
-          {Array.from({ length: 8 }).map((_, index) => (
-            <VideoGridCardSkeleton key={index} />
-          ))}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {Array.from({ length: 8 }).map((_, index) => (
-            <VideoRowCardSkeleton key={index} />
-          ))}
-        </div>
-      )}
-    </>
+    <div>
+      <div className="hidden flex-col gap-4 md:flex">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <VideoRowCardSkeleton key={index} />
+        ))}
+      </div>
+      <div className="flex flex-col gap-4 gap-y-10 p-4 pt-6 md:hidden">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <VideoGridCardSkeleton key={index} />
+        ))}
+      </div>
+    </div>
   )
 }
 

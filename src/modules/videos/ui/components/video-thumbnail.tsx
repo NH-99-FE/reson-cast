@@ -13,8 +13,8 @@ interface VideoThumbnailProps {
 
 export const VideoThumbnailSkeleton = () => {
   return (
-    <div className="relative aspect-video min-h-[90px] w-full overflow-hidden rounded-xl">
-      <Skeleton className="absolute inset-0" />
+    <div className="relative aspect-video w-full overflow-hidden rounded-xl">
+      <Skeleton className="size-full" />
     </div>
   )
 }
