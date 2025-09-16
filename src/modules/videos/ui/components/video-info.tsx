@@ -49,7 +49,7 @@ export const VideoInfo = ({ data, onRemove }: VideoInfoProps) => {
         </Link>
         <Link href={`/videos/${data.id}`}>
           <p className="text-muted-foreground">
-            {compactViews} 浏览量 {compactDate}
+            {compactViews} 浏览量 about {compactDate}
           </p>
         </Link>
       </div>
