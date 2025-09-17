@@ -22,7 +22,7 @@ export const VideoReactions = ({ videoId, viewerReaction, dislikes, likes }: Vid
   const like = trpc.videoReactions.like.useMutation({
     onSuccess: () => {
       utils.videos.getOne.invalidate({ id: videoId })
-      // TODO:点赞列表失效
+      utils.playlists.getLiked.invalidate()
     },
     onError: err => {
       toast.error('出错了')
@@ -35,7 +35,7 @@ export const VideoReactions = ({ videoId, viewerReaction, dislikes, likes }: Vid
   const dislike = trpc.videoReactions.dislike.useMutation({
     onSuccess: () => {
       utils.videos.getOne.invalidate({ id: videoId })
-      // TODO:点赞列表失效
+      utils.playlists.getLiked.invalidate()
     },
     onError: err => {
       if (err.data?.code === 'UNAUTHORIZED') {
