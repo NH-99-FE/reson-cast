@@ -16,19 +16,19 @@ import {
 
 const items = [
   {
-    title: '历史',
+    title: '历史记录',
     url: '/playlists/history',
     icon: HistoryIcon,
     auth: true,
   },
   {
-    title: '点赞',
+    title: '点赞记录',
     url: '/playlists/liked',
     icon: ThumbsUpIcon,
     auth: true,
   },
   {
-    title: '视频',
+    title: '播放列表',
     url: '/playlists',
     icon: ListVideoIcon,
     auth: true,
