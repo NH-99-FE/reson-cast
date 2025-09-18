@@ -48,10 +48,12 @@ export const PlaylistAddModal = ({ onOpenChange, open, videoId }: PlaylistCreate
     },
   })
   const removeVideo = trpc.playlists.removeVideo.useMutation({
-    onSuccess: () => {
+    onSuccess: data => {
       toast.success('删除成功')
       utils.playlists.getMany.invalidate()
-      utils.playlists.getManyForVideo.invalidate({ videoId })
+      utils.playlists.getManyForVideo.invalidate({ videoId: data.videoId })
+      utils.playlists.getOne.invalidate({ id: data.playlistId })
+      utils.playlists.getVideos.invalidate({ playlistId: data.playlistId })
     },
     onError: () => {
       toast.error('删除失败')

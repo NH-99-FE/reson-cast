@@ -79,9 +79,9 @@ const VideosSectionSuspense = () => {
                   </TableCell>
                   <TableCell>{formatVideoStatus(video.muxStatus || 'error')}</TableCell>
                   <TableCell className="truncate text-sm">{format(new Date(video.createdAt), 'd MMM yyyy')}</TableCell>
-                  <TableCell className="text-right text-sm">999</TableCell>
-                  <TableCell className="text-right text-sm">1000</TableCell>
-                  <TableCell className="pr-6 text-right text-sm">1000</TableCell>
+                  <TableCell className="text-right text-sm">{video.viewCount}</TableCell>
+                  <TableCell className="text-right text-sm">{video.commentCount}</TableCell>
+                  <TableCell className="pr-6 text-right text-sm">{video.likeCount}</TableCell>
                 </TableRow>
               ))}
           </TableBody>
