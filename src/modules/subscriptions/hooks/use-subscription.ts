@@ -17,6 +17,7 @@ export const useSubscriptions = ({ userId, fromVideoId, isSubscribed }: UseSubsc
     onSuccess: () => {
       toast.success('关注成功')
       utils.videos.getManySubscribed.invalidate()
+      utils.users.getOne.invalidate({ id: userId })
       if (fromVideoId) {
         utils.videos.getOne.invalidate({ id: fromVideoId })
       }
@@ -33,6 +34,7 @@ export const useSubscriptions = ({ userId, fromVideoId, isSubscribed }: UseSubsc
     onSuccess: () => {
       toast.success('取关成功')
       utils.videos.getManySubscribed.invalidate()
+      utils.users.getOne.invalidate({ id: userId })
       if (fromVideoId) {
         utils.videos.getOne.invalidate({ id: fromVideoId })
       }

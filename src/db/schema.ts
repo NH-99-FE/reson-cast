@@ -11,6 +11,8 @@ export const users = pgTable(
     id: uuid('id').primaryKey().defaultRandom(), // UUID 主键，默认随机值
     clerkId: text('clerk_id').notNull(), // Clerk 的用户ID，必填且唯一
     name: text('name').notNull(),
+    bannerUrl: text('banner_url'),
+    bannerKey: text('banner_key'),
     imageUrl: text('image_url').notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),

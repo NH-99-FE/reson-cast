@@ -21,6 +21,7 @@ interface CommentFormProps {
 
 export const CommentForm = ({ videoId, onSuccess, onCancel, parentId, variant = 'comment' }: CommentFormProps) => {
   const { user } = useClerk()
+
   const utils = trpc.useUtils()
   const clerk = useClerk()
   const create = trpc.comments.create.useMutation({
@@ -50,6 +51,8 @@ export const CommentForm = ({ videoId, onSuccess, onCancel, parentId, variant = 
       value: '',
     },
   })
+
+  const value = form.watch('value')
 
   const handleSubmit = (values: z.infer<typeof commentFormSchema>) => {
     create.mutate(values)
@@ -90,7 +93,7 @@ export const CommentForm = ({ videoId, onSuccess, onCancel, parentId, variant = 
                 取消
               </Button>
             )}
-            <Button type="submit" size="sm" disabled={create.isPending}>
+            <Button type="submit" size="sm" disabled={create.isPending || !value?.trim()}>
               {variant === 'reply' ? '回复' : '评论'}
             </Button>
           </div>

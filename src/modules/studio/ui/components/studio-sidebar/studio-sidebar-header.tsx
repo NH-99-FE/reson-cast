@@ -22,7 +22,7 @@ const StudioSidebarHeader = () => {
     return (
       <SidebarMenuItem>
         <SidebarMenuButton tooltip="我的简介" asChild>
-          <Link href="/user/current">
+          <Link href="/users/current">
             <UserAvatar imageUrl={user.imageUrl} name={user.fullName ?? 'User'} size="xs" />
           </Link>
         </SidebarMenuButton>
@@ -31,12 +31,12 @@ const StudioSidebarHeader = () => {
   }
   return (
     <SidebarHeader className="flex flex-col items-center pb-4">
-      <Link href="/user/current">
+      <Link href="/users/current">
         <UserAvatar imageUrl={user.imageUrl} name={user.fullName ?? 'User'} className="size-[112px] transition-opacity hover:opacity-80" />
       </Link>
       <div className="mt-2 flex flex-col items-center gap-y-1">
-        <p className="text-sm font-medium">sw</p>
-        <p className="text-sm text-muted-foreground">sx</p>
+        <p className="text-sm font-medium">{user.fullName}</p>
+        <p className="text-sm text-muted-foreground">{user.emailAddresses[0].emailAddress}</p>
       </div>
     </SidebarHeader>
   )
