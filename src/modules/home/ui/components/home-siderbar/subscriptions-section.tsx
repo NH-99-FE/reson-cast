@@ -1,6 +1,5 @@
 'use client'
 
-import { useAuth } from '@clerk/nextjs'
 import { ListIcon } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -35,7 +34,6 @@ export const LoadingSkeleton = () => {
 
 export const SubscriptionsSection = () => {
   const pathname = usePathname()
-  const { isSignedIn, isLoaded } = useAuth()
 
   const { data, isLoading, error } = trpc.subscriptions.getMany.useInfiniteQuery(
     {
@@ -43,7 +41,6 @@ export const SubscriptionsSection = () => {
     },
     {
       getNextPageParam: lastPage => lastPage.nextCursor,
-      enabled: isSignedIn && isLoaded, // 确保 Clerk 已加载且用户已登录
     }
   )
 
@@ -52,19 +49,11 @@ export const SubscriptionsSection = () => {
       <SidebarGroupLabel>订阅</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
-          {/* Clerk 状态未加载时显示骨架 */}
-          {!isLoaded && <LoadingSkeleton />}
+          {/* 数据加载中显示骨架 */}
+          {isLoading && <LoadingSkeleton />}
 
-          {/* 已加载但未登录时不显示内容 */}
-          {isLoaded && !isSignedIn && null}
-
-          {/* 已登录且正在加载数据时显示骨架 */}
-          {isLoaded && isSignedIn && isLoading && <LoadingSkeleton />}
-
-          {/* 已登录且数据加载完成时显示订阅列表 */}
-          {isLoaded &&
-            isSignedIn &&
-            !isLoading &&
+          {/* 数据加载完成显示订阅列表 */}
+          {!isLoading &&
             !error &&
             data?.pages.flatMap(page =>
               page.items.map(subscription => (
@@ -79,8 +68,8 @@ export const SubscriptionsSection = () => {
               ))
             )}
 
-          {/* 已登录时始终显示订阅列表链接 */}
-          {isLoaded && isSignedIn && !isLoading && !error && (
+          {/* 始终显示订阅列表链接 */}
+          {!isLoading && !error && (
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={pathname === '/subscriptions'}>
                 <Link prefetch href="/subscriptions" className="flex items-center gap-4">
