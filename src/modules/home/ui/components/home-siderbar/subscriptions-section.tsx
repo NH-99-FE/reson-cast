@@ -1,5 +1,6 @@
 'use client'
 
+import { useAuth } from '@clerk/nextjs'
 import { ListIcon } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -34,21 +35,37 @@ export const LoadingSkeleton = () => {
 
 export const SubscriptionsSection = () => {
   const pathname = usePathname()
-  const { data, isLoading } = trpc.subscriptions.getMany.useInfiniteQuery(
+  const { isSignedIn, isLoaded } = useAuth()
+
+  const { data, isLoading, error } = trpc.subscriptions.getMany.useInfiniteQuery(
     {
       limit: DEFAULT_LIMIT,
     },
     {
       getNextPageParam: lastPage => lastPage.nextCursor,
+      enabled: isSignedIn && isLoaded, // 确保 Clerk 已加载且用户已登录
     }
   )
+
   return (
     <SidebarGroup>
       <SidebarGroupLabel>订阅</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
-          {isLoading && <LoadingSkeleton />}
-          {!isLoading &&
+          {/* Clerk 状态未加载时显示骨架 */}
+          {!isLoaded && <LoadingSkeleton />}
+
+          {/* 已加载但未登录时不显示内容 */}
+          {isLoaded && !isSignedIn && null}
+
+          {/* 已登录且正在加载数据时显示骨架 */}
+          {isLoaded && isSignedIn && isLoading && <LoadingSkeleton />}
+
+          {/* 已登录且数据加载完成时显示订阅列表 */}
+          {isLoaded &&
+            isSignedIn &&
+            !isLoading &&
+            !error &&
             data?.pages.flatMap(page =>
               page.items.map(subscription => (
                 <SidebarMenuItem key={`${subscription.creatorId}-${subscription.viewerId}`}>
@@ -61,7 +78,9 @@ export const SubscriptionsSection = () => {
                 </SidebarMenuItem>
               ))
             )}
-          {!isLoading && (
+
+          {/* 已登录时始终显示订阅列表链接 */}
+          {isLoaded && isSignedIn && !isLoading && !error && (
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={pathname === '/subscriptions'}>
                 <Link prefetch href="/subscriptions" className="flex items-center gap-4">
