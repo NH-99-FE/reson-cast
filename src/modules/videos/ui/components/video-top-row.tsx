@@ -1,7 +1,6 @@
 import { format } from 'date-fns'
 import { formatDistanceToNow } from 'date-fns/formatDistanceToNow'
-import { Suspense, useMemo } from 'react'
-import { ErrorBoundary } from 'react-error-boundary'
+import { useMemo } from 'react'
 
 import { Skeleton } from '@/components/ui/skeleton'
 import { VideoGetOneOutput } from '@/modules/videos/types'

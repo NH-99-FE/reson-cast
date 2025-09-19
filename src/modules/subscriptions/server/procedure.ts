@@ -3,7 +3,7 @@ import { and, desc, eq, getTableColumns, lt, or } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { db } from '@/db'
-import { subscriptions, users, videoReactions, videos, videoViews } from '@/db/schema'
+import { subscriptions, users } from '@/db/schema'
 import { createTRPCRouter, protectedProcedure } from '@/trpc/init'
 
 export const subscriptionsRouter = createTRPCRouter({

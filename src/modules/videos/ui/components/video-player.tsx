@@ -1,6 +1,5 @@
 'use client'
 import MuxPlayer from '@mux/mux-player-react'
-import { useEffect, useState } from 'react'
 
 import { THUMBNAIL_FALLBACK } from '@/modules/videos/constants'
 

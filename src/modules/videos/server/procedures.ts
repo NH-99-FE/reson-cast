@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { and, desc, eq, getTableColumns, ilike, isNotNull, lt, or } from 'drizzle-orm'
+import { and, desc, eq, getTableColumns, isNotNull, lt, or } from 'drizzle-orm'
 import { inArray } from 'drizzle-orm/sql/expressions/conditions'
 import { UTApi } from 'uploadthing/server'
 import { z } from 'zod'

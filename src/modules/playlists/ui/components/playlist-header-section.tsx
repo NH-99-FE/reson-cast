@@ -45,7 +45,7 @@ const PlaylistHeaderSectionSuspense = ({ playlistId }: PlaylistHeaderSectionProp
       utils.playlists.getMany.invalidate()
       router.push('/playlists')
     },
-    onError: err => {
+    onError: () => {
       toast.error('删除失败')
     },
   })
