@@ -22,7 +22,7 @@ const StudioSidebarHeader = () => {
     return (
       <SidebarMenuItem>
         <SidebarMenuButton tooltip="我的简介" asChild>
-          <Link href="/users/current">
+          <Link prefetch href="/users/current">
             <UserAvatar imageUrl={user.imageUrl} name={user.fullName ?? 'User'} size="xs" />
           </Link>
         </SidebarMenuButton>
@@ -31,7 +31,7 @@ const StudioSidebarHeader = () => {
   }
   return (
     <SidebarHeader className="flex flex-col items-center pb-4">
-      <Link href="/users/current">
+      <Link prefetch href="/users/current">
         <UserAvatar imageUrl={user.imageUrl} name={user.fullName ?? 'User'} className="size-[112px] transition-opacity hover:opacity-80" />
       </Link>
       <div className="mt-2 flex flex-col items-center gap-y-1">

@@ -38,17 +38,17 @@ export const VideoInfo = ({ data, onRemove }: VideoInfoProps) => {
   }, [data.createdAt])
   return (
     <div className="flex gap-4">
-      <Link href={`/users/${data.user.id}`}>
+      <Link prefetch href={`/users/${data.user.id}`}>
         <UserAvatar imageUrl={data.user.imageUrl} name={data.user.name} />
       </Link>
       <div className="min-w-0 flex-1">
-        <Link href={`/videos/${data.id}`}>
+        <Link prefetch href={`/videos/${data.id}`}>
           <h3 className="line-clamp-1 text-base font-medium break-words lg:line-clamp-2">{data.title}</h3>
         </Link>
-        <Link href={`/users/${data.user.id}`}>
+        <Link prefetch href={`/users/${data.user.id}`}>
           <UserInfo name={data.user.name} />
         </Link>
-        <Link href={`/videos/${data.id}`}>
+        <Link prefetch href={`/videos/${data.id}`}>
           <p className="text-muted-foreground">
             {compactViews} 浏览量 about {compactDate}
           </p>

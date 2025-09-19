@@ -64,11 +64,11 @@ export const CommentItem = ({ comment, variant = 'comment' }: CommentItemProps) 
   return (
     <div>
       <div className="flex gap-4">
-        <Link href={`/users/${comment.userId}`}>
+        <Link prefetch href={`/users/${comment.userId}`}>
           <UserAvatar imageUrl={comment.user.imageUrl} name={comment.user.name} size={variant === 'comment' ? 'lg' : 'sm'} />
         </Link>
         <div className="min-w-0 flex-1">
-          <Link href={`/users/${comment.userId}`}>
+          <Link prefetch href={`/users/${comment.userId}`}>
             <div className="mb-0.5 flex items-center gap-2">
               <span className="pb-0.5 text-sm font-medium">{comment.user.name}</span>
               <span className="pb-0.5 text-sm text-muted-foreground">{formatDistanceToNow(comment.createdAt, { addSuffix: true })}</span>

@@ -56,7 +56,7 @@ const VideosSectionSuspense = () => {
                   <TableCell className="pl-6">
                     <div className="flex items-center gap-4">
                       <div className="relative aspect-video w-36 shrink-0">
-                        <Link href={`/studio/videos/${video.id}`}>
+                        <Link prefetch href={`/studio/videos/${video.id}`}>
                           <VideoThumbnail
                             imageUrl={video.thumbnailUrl}
                             previewUrl={video.previewUrl}

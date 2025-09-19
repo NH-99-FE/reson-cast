@@ -19,7 +19,7 @@ export const StudioSidebar = () => {
             <StudioSidebarHeader />
             <SidebarMenuItem>
               <SidebarMenuButton isActive={pathname === '/studio'} tooltip="视频内容" asChild>
-                <Link href="/studio">
+                <Link prefetch href="/studio">
                   <VideoIcon className="size-5" />
                   <span className="text-sm">视频内容</span>
                 </Link>
@@ -28,7 +28,7 @@ export const StudioSidebar = () => {
             <Separator />
             <SidebarMenuItem>
               <SidebarMenuButton tooltip="退出工作空间" asChild>
-                <Link href="/">
+                <Link prefetch href="/">
                   <LogOutIcon className="size-5" />
                   <span className="text-sm">退出工作空间</span>
                 </Link>

@@ -19,7 +19,7 @@ export const VideoOwner = ({ user, videoId }: VideoOwnerProps) => {
   const { onClick, isPending } = useSubscriptions({ userId: user.id, fromVideoId: videoId, isSubscribed: user.viewerSubscribed })
   return (
     <div className="flex min-w-0 items-center justify-between gap-3 sm:items-start sm:justify-start">
-      <Link href={`/users/${user.id}`}>
+      <Link prefetch href={`/users/${user.id}`}>
         <div className="flex min-w-0 items-center gap-3">
           <UserAvatar size="lg" imageUrl={user.imageUrl} name={user.name} />
           <div className="flex min-w-0 flex-col gap-1">
@@ -30,7 +30,9 @@ export const VideoOwner = ({ user, videoId }: VideoOwnerProps) => {
       </Link>
       {userClerkId === user.clerkId ? (
         <Button asChild className="rounded-full" variant="secondary">
-          <Link href={`/studio/videos/${videoId}`}>编辑视频</Link>
+          <Link prefetch href={`/studio/videos/${videoId}`}>
+            编辑视频
+          </Link>
         </Button>
       ) : (
         <SubscriptionButton

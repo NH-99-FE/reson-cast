@@ -12,7 +12,7 @@ export const HomeNavbar = () => {
         {/*菜单和logo*/}
         <div className="flex flex-shrink-0 items-center">
           <SidebarTrigger />
-          <Link href="/public">
+          <Link prefetch href="/" className="hidden md:block">
             <div className="flex items-center gap-1 p-4">
               <Image src="/logo.svg" alt="logo" width={32} height={32}></Image>
               <p className="text-xl font-semibold tracking-tight">ResonCast</p>

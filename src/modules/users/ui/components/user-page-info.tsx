@@ -83,7 +83,9 @@ export const UserPageInfo = ({ user }: UserPageBannerProps) => {
         </div>
         {userClerkId === user.clerkId ? (
           <Button asChild variant="secondary" type="button" className="mt-3 w-full rounded-full" onClick={() => {}}>
-            <Link href="/studio">去工作室</Link>
+            <Link prefetch href="/studio">
+              去工作室
+            </Link>
           </Button>
         ) : (
           <SubscriptionButton
@@ -116,7 +118,9 @@ export const UserPageInfo = ({ user }: UserPageBannerProps) => {
           </div>
           {userClerkId === user.clerkId ? (
             <Button asChild variant="secondary" type="button" className="mt-3 rounded-full" onClick={() => {}}>
-              <Link href="/studio">去工作室</Link>
+              <Link prefetch href="/studio">
+                去工作室
+              </Link>
             </Button>
           ) : (
             <SubscriptionButton className="mt-3" onClick={onClick} disabled={isPending || !isLoaded} isSubscribed={user.viewerSubscribed} />
