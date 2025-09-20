@@ -252,13 +252,20 @@ export const playlistsRouter = createTRPCRouter({
       const data = await db
         .select({
           ...getTableColumns(playlists),
-          videoCount: db.$count(playlistVideos, eq(playlists.id, playlistVideos.playlistId)),
+          videoCount: sql<number>`(
+            SELECT COUNT(*)
+            FROM ${playlistVideos} pv
+            JOIN ${videos} v ON v.id = pv.video_id
+            WHERE pv.playlist_id = ${playlists.id}
+              AND v.visibility = 'public'
+          )`,
           user: users,
           thumbnailUrl: sql<string | null>`(
             SELECT v.thumbnail_url
             FROM ${playlistVideos} pv
             JOIN ${videos} v ON v.id = pv.video_id
             WHERE pv.playlist_id = ${playlists.id}
+              AND v.visibility = 'public'
             ORDER BY pv.updated_at DESC 
             LIMIT 1
           )`,
