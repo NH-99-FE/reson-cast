@@ -2,6 +2,7 @@ import './globals.css'
 
 import { zhCN } from '@clerk/localizations'
 import { ClerkProvider } from '@clerk/nextjs'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import type { Metadata } from 'next'
 import { Noto_Sans_SC } from 'next/font/google'
 
@@ -31,6 +32,7 @@ export default function RootLayout({
           <TRPCProvider>
             <Toaster />
             {children}
+            <SpeedInsights />
           </TRPCProvider>
         </body>
       </html>
