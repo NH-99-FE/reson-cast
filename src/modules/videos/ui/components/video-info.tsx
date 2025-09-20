@@ -50,7 +50,7 @@ export const VideoInfo = ({ data, onRemove }: VideoInfoProps) => {
         </Link>
         <Link prefetch href={`/videos/${data.id}`}>
           <p className="text-muted-foreground">
-            {compactViews} 浏览量 about {compactDate}
+            {compactViews} 浏览量 {compactDate}
           </p>
         </Link>
       </div>
