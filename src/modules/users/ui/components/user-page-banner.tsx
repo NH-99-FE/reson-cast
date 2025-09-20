@@ -19,7 +19,6 @@ export const UserPageBannerSkeleton = () => {
 export const UserPageBanner = ({ user }: UserPageBannerProps) => {
   const { userId } = useAuth()
   const [isBannerUploadModalOpen, setIsBannerUploadModalOpen] = useState(false)
-  console.log(user)
   return (
     <div className="group relative">
       <BannerUploadModal userId={user.id} open={isBannerUploadModalOpen} onOpenChange={setIsBannerUploadModalOpen} />
