@@ -5,7 +5,20 @@ import { Suspense } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import { toast } from 'sonner'
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { ContextMenu } from '@/components/ui/context-menu'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { trpc } from '@/trpc/client'
 
@@ -55,15 +68,23 @@ const PlaylistHeaderSectionSuspense = ({ playlistId }: PlaylistHeaderSectionProp
         <h1 className="text-2xl font-bold">{playlist.name}</h1>
         <p className="text-xs text-muted-foreground">来自播放列表</p>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        disabled={remove.isPending}
-        className="rounded-full"
-        onClick={() => remove.mutate({ id: playlistId })}
-      >
-        <Trash2Icon />
-      </Button>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button variant="ghost" size="icon" disabled={remove.isPending} className="rounded-full">
+            <Trash2Icon />
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除吗</AlertDialogTitle>
+            <AlertDialogDescription>该操作无法撤销，请谨慎！</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={() => remove.mutate({ id: playlistId })}>确认</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
