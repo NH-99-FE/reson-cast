@@ -12,6 +12,12 @@
 
 Reson Cast 是一个功能完整的现代化视频分享平台，类似 YouTube。项目采用 Next.js 15 全栈架构，实现了完整的视频分享平台，构建了用户认证订阅、视频点赞评论、多层级回复等社交互动体系，提供搜索分类、个性化推荐、热门内容等内容发现机制，以及面向创作者的视频管理工作台同时集成 AI 智能生成标题简介封面功能。
 
+<div align="center">
+  <a href="https://reson-cast.vercel.app/" target="_blank">
+    <img src="https://img.shields.io/badge/🌐_在线预览-Visit_Site-blue?style=for-the-badge" alt="在线预览" />
+  </a>
+</div>
+
 ### ✨ 核心特性
 
 - 🎥 **视频管理** - 支持视频上传、删除、分享
