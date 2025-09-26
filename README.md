@@ -1,4 +1,4 @@
-# MyTube - 现代化视频分享平台
+# Reson Cast - 现代化视频分享平台
 
 <div align="center">
   <img src="https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js" alt="Next.js" />
