@@ -60,8 +60,8 @@ Reson Cast 是一个功能完整的现代化视频分享平台，类似 YouTube�
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-username/mytube.git
-cd mytube
+git clone https://github.com/NH-99-FE/reson-cast.git
+cd reson-cast
 
 # 安装依赖
 pnpm install
