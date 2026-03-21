@@ -43,8 +43,8 @@ export const HomeVideosSectionSuspense = ({ categoryId }: HomeVideosSectionProps
       <div className="[@media(min-width:1920px):grid-col-5] [@media(min-width:2200px):grid-col-6] grid grid-cols-1 gap-4 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
         {videos.pages
           .flatMap(page => page.items)
-          .map(video => (
-            <VideoGridCard key={video.id} data={video}></VideoGridCard>
+          .map((video, index) => (
+            <VideoGridCard key={video.id} data={video} priority={index === 0}></VideoGridCard>
           ))}
       </div>
       <InfiniteScroll hasNextPage={query.hasNextPage} isFetchingNextPage={query.isFetchingNextPage} fetchNextPage={query.fetchNextPage} />

@@ -8,6 +8,7 @@ import { VideoInfo, VideoInfoSkeleton } from './video-info'
 interface VideoGridCardProps {
   data: VideoGetManyOutput['items'][number]
   onRemove?: () => void
+  priority?: boolean
 }
 
 export const VideoGridCardSkeleton = () => {
@@ -19,11 +20,17 @@ export const VideoGridCardSkeleton = () => {
   )
 }
 
-export const VideoGridCard = ({ data, onRemove }: VideoGridCardProps) => {
+export const VideoGridCard = ({ data, onRemove, priority = false }: VideoGridCardProps) => {
   return (
     <div className="group flex w-full flex-col gap-2">
       <Link prefetch href={`/videos/${data.id}`}>
-        <VideoThumbnail imageUrl={data.thumbnailUrl} previewUrl={data.previewUrl} title={data.title} duration={data.duration} />
+        <VideoThumbnail
+          imageUrl={data.thumbnailUrl}
+          previewUrl={data.previewUrl}
+          title={data.title}
+          duration={data.duration}
+          priority={priority}
+        />
       </Link>
       <VideoInfo data={data} onRemove={onRemove} />
     </div>
