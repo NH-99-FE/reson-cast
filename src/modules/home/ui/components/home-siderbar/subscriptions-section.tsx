@@ -1,9 +1,11 @@
 'use client'
 
+import { useAuth } from '@clerk/nextjs'
 import { ListIcon } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+import { Separator } from '@/components/ui/separator'
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -34,29 +36,36 @@ export const LoadingSkeleton = () => {
 
 export const SubscriptionsSection = () => {
   const pathname = usePathname()
+  const { isLoaded, isSignedIn } = useAuth()
 
   const { data, isLoading, error } = trpc.subscriptions.getMany.useInfiniteQuery(
     {
       limit: DEFAULT_LIMIT,
     },
     {
+      enabled: isLoaded && isSignedIn,
       getNextPageParam: lastPage => lastPage.nextCursor,
     }
   )
 
-  return (
-    <SidebarGroup>
-      <SidebarGroupLabel>订阅</SidebarGroupLabel>
-      <SidebarGroupContent>
-        <SidebarMenu>
-          {/* 数据加载中显示骨架 */}
-          {isLoading && <LoadingSkeleton />}
+  if (!isLoaded || !isSignedIn) {
+    return null
+  }
 
-          {/* 数据加载完成显示订阅列表 */}
-          {!isLoading &&
-            !error &&
-            data?.pages.flatMap(page =>
-              page.items.map(subscription => (
+  const subscriptions = data?.pages.flatMap(page => page.items) ?? []
+
+  return (
+    <>
+      <Separator />
+      <SidebarGroup>
+        <SidebarGroupLabel>订阅</SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            {isLoading && <LoadingSkeleton />}
+
+            {!isLoading &&
+              !error &&
+              subscriptions.map(subscription => (
                 <SidebarMenuItem key={`${subscription.creatorId}-${subscription.viewerId}`}>
                   <SidebarMenuButton tooltip={subscription.user.name} asChild isActive={pathname === `/users/${subscription.user.id}`}>
                     <Link prefetch href={`/users/${subscription.user.id}`} className="flex items-center gap-5">
@@ -65,22 +74,37 @@ export const SubscriptionsSection = () => {
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-              ))
+              ))}
+
+            {!isLoading && error && (
+              <SidebarMenuItem>
+                <SidebarMenuButton disabled>
+                  <span className="text-sm text-muted-foreground">订阅加载失败</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             )}
 
-          {/* 始终显示订阅列表链接 */}
-          {!isLoading && !error && (
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={pathname === '/subscriptions'}>
-                <Link prefetch href="/subscriptions" className="flex items-center gap-4">
-                  <ListIcon className="size-4" />
-                  <span className="text-sm">订阅列表</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
+            {!isLoading && !error && subscriptions.length === 0 && (
+              <SidebarMenuItem>
+                <SidebarMenuButton disabled>
+                  <span className="text-sm text-muted-foreground">暂无订阅</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+
+            {!isLoading && !error && (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === '/subscriptions'}>
+                  <Link prefetch href="/subscriptions" className="flex items-center gap-4">
+                    <ListIcon className="size-4" />
+                    <span className="text-sm">订阅列表</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    </>
   )
 }
