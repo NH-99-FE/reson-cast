@@ -1,7 +1,7 @@
 'use client'
 import { useAuth } from '@clerk/nextjs'
 import MuxPlayer from '@mux/mux-player-react'
-import { useEffect, useState } from 'react'
+import { type ComponentRef, useCallback, useEffect, useState } from 'react'
 
 import { THUMBNAIL_FALLBACK } from '@/modules/videos/constants'
 import { trpc } from '@/trpc/client'
@@ -20,6 +20,15 @@ export const VideoPlayerSkeleton = () => {
 }
 
 export const VideoPlayer = ({ videoId, thumbnailUrl, autoPlay, onPlay }: VideoPlayerProps) => {
+  const attachPlayer = useCallback((player: ComponentRef<typeof MuxPlayer> | null) => {
+    if (!player) return
+
+    // Stop media before React detaches the custom element on navigation or replacement.
+    return () => {
+      player.autoplay = false
+      player.pause()
+    }
+  }, [])
   const { userId, isLoaded } = useAuth()
   const playbackKey = `${videoId}:${userId ?? 'guest'}`
   const [deniedPlaybackKey, setDeniedPlaybackKey] = useState<string | null>(null)
@@ -50,7 +59,9 @@ export const VideoPlayer = ({ videoId, thumbnailUrl, autoPlay, onPlay }: VideoPl
     )
   return (
     <MuxPlayer
+      ref={attachPlayer}
       key={playbackKey}
+      debug={false}
       tokens={playback.data?.tokens}
       playbackId={playback.data?.playbackId || ''}
       preferPlayback="mse"
