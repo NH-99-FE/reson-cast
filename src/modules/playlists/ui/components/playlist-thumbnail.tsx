@@ -35,7 +35,7 @@ export const PlaylistThumbnail = ({ imageUrl, title, videoCount, className }: Pl
         <div className="absolute -top-1.5 left-1/2 aspect-video w-[98.5%] -translate-x-1/2 overflow-hidden rounded-xl bg-black/25" />
         {/*image*/}
         <div className="relative aspect-video w-full overflow-hidden rounded-xl">
-          <Image src={imageUrl || THUMBNAIL_FALLBACK} alt={title} className="h-full w-full object-cover" fill />
+          <Image src={imageUrl || THUMBNAIL_FALLBACK} alt={title} className="h-full w-full object-cover" fill unoptimized />
         </div>
         <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/70 opacity-0 transition-opacity group-hover:opacity-100">
           <div className="flex items-center gap-x-2">

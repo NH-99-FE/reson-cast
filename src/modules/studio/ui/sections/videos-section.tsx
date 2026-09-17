@@ -1,12 +1,14 @@
 'use client'
 
 import { format } from 'date-fns'
-import { Globe2Icon, LockIcon } from 'lucide-react'
+import { Globe2Icon, Loader2Icon, LockIcon } from 'lucide-react'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
+import { toast } from 'sonner'
 
 import { InfiniteScroll } from '@/components/infinite-scroll'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DEFAULT_LIMIT } from '@/constants'
@@ -25,12 +27,25 @@ export const VideosSection = () => {
 }
 
 const VideosSectionSuspense = () => {
+  const utils = trpc.useUtils()
+  const remove = trpc.videos.remove.useMutation({
+    onSuccess: () => {
+      utils.studio.getMany.invalidate()
+      toast.success('删除任务已提交')
+    },
+    onError: () => {
+      utils.studio.getMany.invalidate()
+      toast.error('提交失败，请重试')
+    },
+  })
   const [videos, query] = trpc.studio.getMany.useSuspenseInfiniteQuery(
     {
       limit: DEFAULT_LIMIT,
     },
     {
       getNextPageParam: lastPage => lastPage.nextCursor,
+      refetchInterval: query =>
+        query.state.data?.pages.some(page => page.items.some(video => video.deletionRequestedAt && !video.deletionError)) ? 5000 : false,
     }
   )
   return (
@@ -56,14 +71,16 @@ const VideosSectionSuspense = () => {
                   <TableCell className="pl-6">
                     <div className="flex items-center gap-4">
                       <div className="relative aspect-video w-36 shrink-0">
-                        <Link prefetch href={`/studio/videos/${video.id}`}>
-                          <VideoThumbnail
-                            imageUrl={video.thumbnailUrl}
-                            previewUrl={video.previewUrl}
-                            title={video.title}
-                            duration={video.duration || 0}
-                          />
-                        </Link>
+                        {!video.deletionRequestedAt && (
+                          <Link prefetch href={`/studio/videos/${video.id}`}>
+                            <VideoThumbnail
+                              imageUrl={video.thumbnailUrl}
+                              previewUrl={video.previewUrl}
+                              title={video.title}
+                              duration={video.duration || 0}
+                            />
+                          </Link>
+                        )}
                       </div>
                       <div className="flex max-w-[300px] flex-col gap-y-1">
                         <span className="truncate text-sm">{video.title}</span>
@@ -77,7 +94,27 @@ const VideosSectionSuspense = () => {
                       <span>{formatVideoVisiblity(video.visibility || 'error')}</span>
                     </div>
                   </TableCell>
-                  <TableCell>{formatVideoStatus(video.muxStatus || 'error')}</TableCell>
+                  <TableCell>
+                    {video.deletionRequestedAt ? (
+                      <div className="space-y-2">
+                        {video.deletionError ? (
+                          <>
+                            <p>删除失败</p>
+                            <Button size="sm" variant="outline" disabled={remove.isPending} onClick={() => remove.mutate({ id: video.id })}>
+                              重试删除
+                            </Button>
+                          </>
+                        ) : (
+                          <p role="status" className="flex items-center gap-2">
+                            正在删除
+                            <Loader2Icon aria-hidden="true" className="size-4 animate-spin" />
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      formatVideoStatus(video.muxStatus || 'error')
+                    )}
+                  </TableCell>
                   <TableCell className="truncate text-sm">{format(new Date(video.createdAt), 'd MMM yyyy')}</TableCell>
                   <TableCell className="text-right text-sm">{video.viewCount}</TableCell>
                   <TableCell className="text-right text-sm">{video.commentCount}</TableCell>

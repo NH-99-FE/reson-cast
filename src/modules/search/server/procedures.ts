@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import { db } from '@/db'
 import { users, videoReactions, videos, videoViews } from '@/db/schema'
+import { publicVideoCondition } from '@/modules/videos/server/services/access'
 import { baseProcedure, createTRPCRouter } from '@/trpc/init'
 
 export const searchRouter = createTRPCRouter({
@@ -34,6 +35,7 @@ export const searchRouter = createTRPCRouter({
         .innerJoin(users, eq(videos.userId, users.id))
         .where(
           and(
+            publicVideoCondition(),
             ilike(videos.title, `%${query}%`),
             categoryId ? eq(videos.categoryId, categoryId) : undefined,
             cursor

@@ -113,6 +113,13 @@ const FormSectionSkeleton = () => {
 const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
   const router = useRouter()
   const utils = trpc.useUtils()
+  const refreshVideo = () => {
+    void utils.studio.getOne.invalidate({ id: videoId })
+    void utils.studio.getMany.invalidate()
+    void utils.videos.invalidate()
+    void utils.search.invalidate()
+    void utils.playlists.invalidate()
+  }
 
   const [thumbnailModalOpen, setThumbnailModalOpen] = useState<boolean>(false)
   const [thumbnailGenerateModalOpen, setThumbnailGenerateModalOpen] = useState<boolean>(false)
@@ -136,37 +143,39 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
     onSuccess: () => {
       // 旧缓存失效
       utils.studio.getMany.invalidate()
-      toast.success('删除成功')
+      toast.success('已提交删除，正在清理资源')
       router.push('/studio')
     },
     onError: () => {
-      toast.error('删除失败')
+      toast.error('删除提交失败，请在工作台重试')
+      utils.studio.getMany.invalidate()
+      router.push('/studio')
     },
   })
 
   const revalidate = trpc.videos.revalidate.useMutation({
     onSuccess: () => {
-      // 旧缓存失效
-      utils.studio.getMany.invalidate()
-      utils.studio.getOne.invalidate({ id: videoId })
+      refreshVideo()
       toast.success('验证成功')
     },
+    onError: error => toast.error(error.message || '验证未完成，请重试'),
+  })
+  const retryRevocation = trpc.videos.retryPlaybackRevocation.useMutation({
+    onSuccess: () => {
+      refreshVideo()
+      toast.success('播放权限已更新')
+    },
     onError: () => {
-      toast.error('验证失败')
+      refreshVideo()
+      toast.error('播放权限更新未完成，请重试')
     },
   })
-
-  // 恢复缩略图
   const restoreThumbnail = trpc.videos.restoreThumbnail.useMutation({
     onSuccess: () => {
-      // 旧缓存失效
-      utils.studio.getMany.invalidate()
-      utils.studio.getOne.invalidate({ id: videoId })
+      refreshVideo()
       toast.success('恢复成功')
     },
-    onError: () => {
-      toast.error('恢复失败')
-    },
+    onError: () => toast.error('恢复失败'),
   })
 
   // AI生成标题
@@ -197,6 +206,16 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
   const onSubmit = async (data: z.infer<typeof videoUpdateSchema>) => {
     await update.mutate(data)
   }
+
+  const cleanup = trpc.videos.getPendingFileCleanup.useQuery({ id: videoId })
+  const retryCleanup = trpc.videos.retryFileCleanup.useMutation({
+    onSuccess: result => {
+      void cleanup.refetch()
+      if (result.count) toast.error('仍有文件未清理，请稍后重试')
+      else toast.success('旧封面已清理')
+    },
+    onError: () => toast.error('清理失败，请稍后重试'),
+  })
 
   const fullUrl = `${APP_URL}/videos/${videoId}`
 
@@ -243,6 +262,19 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
               </DropdownMenu>
             </div>
           </div>
+          {video.muxPlaybackIdToRevoke && (
+            <div role="status" className="mb-6 flex items-center justify-between gap-4 rounded-md border p-4 text-sm">
+              <p>视频已隐藏，旧播放权限尚未撤销完成。</p>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={retryRevocation.isPending || update.isPending}
+                onClick={() => retryRevocation.mutate({ id: videoId })}
+              >
+                {retryRevocation.isPending ? '正在重试' : '重试撤销'}
+              </Button>
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
             <div className="space-y-8 lg:col-span-3">
               {/*标题区域*/}
@@ -311,45 +343,59 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                 )}
               />
               {/*调整缩略图区域*/}
-              <FormField
-                name="thumbnailUrl"
-                control={form.control}
-                render={() => (
-                  <FormItem>
-                    <FormLabel>缩略图</FormLabel>
-                    <FormControl>
-                      <div className="group relative h-[84px] w-[153px] border border-dashed border-neutral-400 p-0.5">
-                        <Image src={video.thumbnailUrl || THUMBNAIL_FALLBACK} alt="thumbnail" className="object-cover" fill unoptimized />
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              type="button"
-                              size="icon"
-                              className="absolute top-1 right-1 size-7 rounded-full bg-black/50 opacity-100 duration-300 group-hover:opacity-100 hover:bg-black/50 md:opacity-0"
-                            >
-                              <MoreVerticalIcon className="text-white" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" side="right">
-                            <DropdownMenuItem onClick={() => setThumbnailModalOpen(true)}>
-                              <ImagePlusIcon className="mr-2 size-4" />
-                              <span>修改</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setThumbnailGenerateModalOpen(true)}>
-                              <SparklesIcon className="mr-2 size-4" />
-                              <span>AI生成</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => restoreThumbnail.mutate({ id: videoId })}>
-                              <RotateCcwIcon className="mr-2 size-4" />
-                              <span>还原</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+              <FormItem>
+                <p className="text-sm font-medium">缩略图</p>
+
+                <div className="group relative h-[84px] w-[153px] border border-dashed border-neutral-400 p-0.5">
+                  <Image
+                    key={`${video.id}:${video.thumbnailKey ?? 'mux'}`}
+                    src={video.thumbnailUrl || THUMBNAIL_FALLBACK}
+                    alt="thumbnail"
+                    className="object-cover"
+                    fill
+                    unoptimized
+                  />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        size="icon"
+                        className="absolute top-1 right-1 size-7 rounded-full bg-black/50 opacity-100 duration-300 group-hover:opacity-100 hover:bg-black/50 md:opacity-0"
+                      >
+                        <MoreVerticalIcon className="text-white" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" side="right">
+                      <DropdownMenuItem onClick={() => setThumbnailModalOpen(true)}>
+                        <ImagePlusIcon className="mr-2 size-4" />
+                        <span>修改</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setThumbnailGenerateModalOpen(true)}>
+                        <SparklesIcon className="mr-2 size-4" />
+                        <span>AI生成</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => restoreThumbnail.mutate({ id: videoId })}>
+                        <RotateCcwIcon className="mr-2 size-4" />
+                        <span>还原</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </FormItem>
+              {!!cleanup.data?.count && (
+                <div role="status" className="flex items-center gap-2 text-sm">
+                  <span>有 {cleanup.data.count} 个旧封面文件等待清理，不影响当前封面。</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={retryCleanup.isPending}
+                    onClick={() => retryCleanup.mutate({ id: videoId })}
+                  >
+                    重试清理
+                  </Button>
+                </div>
+              )}
               {/*分类区域*/}
               <FormField
                 control={form.control}
@@ -380,7 +426,14 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
             <div className="flex flex-col gap-y-8 lg:col-span-2">
               <div className="flex h-fit flex-col gap-4 overflow-hidden rounded-xl bg-[#F9F9F9]">
                 <div className="ralative aspect-video overflow-hidden">
-                  <VideoPlayer playbackId={video.muxPlaybackId} thumbnailUrl={video.thumbnailUrl} />
+                  <VideoPlayer
+                    videoId={video.id}
+                    thumbnailUrl={
+                      video.thumbnailUrl
+                        ? `${video.thumbnailUrl}${video.thumbnailUrl.includes('?') ? '&' : '?'}cover=${encodeURIComponent(video.thumbnailKey ?? 'mux')}`
+                        : null
+                    }
+                  />
                 </div>
                 <div className="flex flex-col gap-y-6 p-4">
                   <div className="flex items-center justify-between gap-x-2">

@@ -3,12 +3,14 @@ import { z } from 'zod'
 
 import { db } from '@/db'
 import { videoReactions } from '@/db/schema'
+import { requireVideo } from '@/modules/videos/server/services/access'
 import { createTRPCRouter, protectedProcedure } from '@/trpc/init'
 
 export const videoReactionsRouter = createTRPCRouter({
   like: protectedProcedure.input(z.object({ videoId: z.uuid() })).mutation(async ({ input, ctx }) => {
     const { videoId } = input
     const { id: userId } = ctx.user
+    await requireVideo(videoId, userId)
     const [existVideoReaction] = await db
       .select()
       .from(videoReactions)
@@ -35,6 +37,7 @@ export const videoReactionsRouter = createTRPCRouter({
   dislike: protectedProcedure.input(z.object({ videoId: z.uuid() })).mutation(async ({ input, ctx }) => {
     const { videoId } = input
     const { id: userId } = ctx.user
+    await requireVideo(videoId, userId)
     const [existVideoReaction] = await db
       .select()
       .from(videoReactions)

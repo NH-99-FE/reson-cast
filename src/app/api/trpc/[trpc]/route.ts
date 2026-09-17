@@ -8,5 +8,6 @@ const handler = (req: Request) =>
     req,
     router: appRouter,
     createContext: createTRPCContext,
+    responseMeta: () => ({ headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie, Authorization' } }),
   })
 export { handler as GET, handler as POST }

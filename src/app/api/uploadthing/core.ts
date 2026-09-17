@@ -1,11 +1,12 @@
 import { auth } from '@clerk/nextjs/server'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { createUploadthing, type FileRouter } from 'uploadthing/next'
 import { UploadThingError, UTApi } from 'uploadthing/server'
 import { z } from 'zod'
 
 import { db } from '@/db'
 import { users, videos } from '@/db/schema'
+import { replaceVideoThumbnail } from '@/modules/videos/server/services/thumbnails'
 
 const f = createUploadthing()
 
@@ -47,6 +48,7 @@ export const ourFileRouter = {
     image: {
       maxFileSize: '4MB',
       maxFileCount: 1,
+      acl: 'private',
     },
   })
     .input(
@@ -68,30 +70,20 @@ export const ourFileRouter = {
           thumbnailKey: videos.thumbnailKey,
         })
         .from(videos)
-        .where(and(eq(videos.id, input.videoId), eq(videos.userId, user.id)))
+        .where(and(eq(videos.id, input.videoId), eq(videos.userId, user.id), isNull(videos.deletionRequestedAt)))
 
       if (!existingVideo) throw new UploadThingError('Not found')
 
-      // 更改缩略图之前会先将之前的url和key置为空
-      if (existingVideo.thumbnailKey) {
-        const utapi = new UTApi()
-        await utapi.deleteFiles(existingVideo.thumbnailKey)
-        await db
-          .update(videos)
-          .set({ thumbnailKey: null, thumbnailUrl: null })
-          .where(and(eq(videos.id, input.videoId), eq(videos.userId, user.id)))
-      }
-      return { user, ...input }
+      return { userId: user.id, videoId: input.videoId, oldKey: existingVideo.thumbnailKey }
     })
     .onUploadComplete(async ({ metadata, file }) => {
-      await db
-        .update(videos)
-        .set({
-          thumbnailUrl: file.ufsUrl,
-          thumbnailKey: file.key,
-        })
-        .where(and(eq(videos.id, metadata.videoId), eq(videos.userId, metadata.user.id)))
-      return { uploadedBy: metadata.user.id }
+      const { attached } = await replaceVideoThumbnail({
+        videoId: metadata.videoId,
+        userId: metadata.userId,
+        expectedKey: metadata.oldKey,
+        newKey: file.key,
+      })
+      return { uploadedBy: metadata.userId, attached }
     }),
 } satisfies FileRouter
 

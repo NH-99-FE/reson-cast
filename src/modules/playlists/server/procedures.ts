@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { db } from '@/db'
 import { playlists, playlistVideos, users, videoReactions, videos, videoViews } from '@/db/schema'
+import { publicVideoCondition, requireVideo } from '@/modules/videos/server/services/access'
 import { createTRPCRouter, protectedProcedure } from '@/trpc/init'
 
 export const playlistsRouter = createTRPCRouter({
@@ -86,7 +87,7 @@ export const playlistsRouter = createTRPCRouter({
         .innerJoin(videosFromPlaylist, eq(videosFromPlaylist.videoId, videos.id))
         .where(
           and(
-            eq(videos.visibility, 'public'),
+            publicVideoCondition(),
             cursor
               ? or(lt(videos.updatedAt, cursor.updatedAt), and(eq(videos.updatedAt, cursor.updatedAt), lt(videos.id, cursor.id)))
               : undefined
@@ -125,9 +126,7 @@ export const playlistsRouter = createTRPCRouter({
 
     if (!existingPlaylist) throw new TRPCError({ code: 'NOT_FOUND', message: 'Playlist not found' })
 
-    const [existingVideo] = await db.select().from(videos).where(eq(videos.id, videoId))
-
-    if (!existingVideo) throw new TRPCError({ code: 'NOT_FOUND', message: 'Video not found' })
+    await requireVideo(videoId, userId)
 
     const [existingPlaylistVideo] = await db
       .select()
@@ -154,9 +153,7 @@ export const playlistsRouter = createTRPCRouter({
 
     if (!existingPlaylist) throw new TRPCError({ code: 'NOT_FOUND', message: 'Playlist not found' })
 
-    const [existingVideo] = await db.select().from(videos).where(eq(videos.id, videoId))
-
-    if (!existingVideo) throw new TRPCError({ code: 'NOT_FOUND', message: 'Video not found' })
+    await requireVideo(videoId, userId)
 
     const [existingPlaylistVideo] = await db
       .select()
@@ -184,12 +181,14 @@ export const playlistsRouter = createTRPCRouter({
     )
     .query(async ({ input, ctx }) => {
       const { cursor, limit, videoId } = input
+      await requireVideo(videoId, ctx.user.id)
       const { id: userId } = ctx.user
 
       const data = await db
         .select({
           ...getTableColumns(playlists),
-          videoCount: db.$count(playlistVideos, eq(playlists.id, playlistVideos.playlistId)),
+          videoCount: sql<number>`(SELECT COUNT(*) FROM ${playlistVideos} pv JOIN ${videos} v ON v.id = pv.video_id
+            WHERE pv.playlist_id = ${playlists.id} AND v.visibility = 'public' AND v.deletion_requested_at IS NULL)`,
           user: users,
           containsVideo: videoId
             ? sql<boolean>`(
@@ -257,7 +256,7 @@ export const playlistsRouter = createTRPCRouter({
             FROM ${playlistVideos} pv
             JOIN ${videos} v ON v.id = pv.video_id
             WHERE pv.playlist_id = ${playlists.id}
-              AND v.visibility = 'public'
+              AND v.visibility = 'public' AND v.deletion_requested_at IS NULL
           )`,
           user: users,
           thumbnailUrl: sql<string | null>`(
@@ -265,7 +264,7 @@ export const playlistsRouter = createTRPCRouter({
             FROM ${playlistVideos} pv
             JOIN ${videos} v ON v.id = pv.video_id
             WHERE pv.playlist_id = ${playlists.id}
-              AND v.visibility = 'public'
+              AND v.visibility = 'public' AND v.deletion_requested_at IS NULL
             ORDER BY pv.updated_at DESC 
             LIMIT 1
           )`,
@@ -358,7 +357,7 @@ export const playlistsRouter = createTRPCRouter({
         .innerJoin(viewerVideoViews, eq(viewerVideoViews.videoId, videos.id))
         .where(
           and(
-            eq(videos.visibility, 'public'),
+            publicVideoCondition(),
             cursor
               ? or(
                   lt(viewerVideoViews.viewedAt, cursor.viewedAt),
@@ -430,7 +429,7 @@ export const playlistsRouter = createTRPCRouter({
         .innerJoin(viewerVideoReactions, eq(viewerVideoReactions.videoId, videos.id))
         .where(
           and(
-            eq(videos.visibility, 'public'),
+            publicVideoCondition(),
             cursor
               ? or(
                   lt(viewerVideoReactions.likedAt, cursor.likedAt),

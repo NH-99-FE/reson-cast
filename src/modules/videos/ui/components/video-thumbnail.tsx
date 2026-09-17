@@ -31,6 +31,7 @@ export const VideoThumbnail = ({ title, imageUrl, previewUrl, duration, priority
           alt={title}
           fill
           priority={priority}
+          unoptimized
           sizes="(min-width: 2200px) 16vw, (min-width: 1920px) 20vw, (min-width: 1536px) 23vw, (min-width: 1024px) 30vw, (min-width: 640px) 48vw, 100vw"
           className="h-full w-full object-cover group-hover:opacity-0"
           onError={e => {
@@ -42,7 +43,7 @@ export const VideoThumbnail = ({ title, imageUrl, previewUrl, duration, priority
           src={previewUrl || THUMBNAIL_FALLBACK}
           alt={title}
           fill
-          unoptimized={!!previewUrl}
+          unoptimized
           sizes="(min-width: 2200px) 16vw, (min-width: 1920px) 20vw, (min-width: 1536px) 23vw, (min-width: 1024px) 30vw, (min-width: 640px) 48vw, 100vw"
           className="h-full w-full object-cover opacity-0 group-hover:opacity-100"
         />

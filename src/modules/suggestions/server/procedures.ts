@@ -1,9 +1,10 @@
 import { TRPCError } from '@trpc/server'
-import { and, desc, eq, getTableColumns, lt, not, or } from 'drizzle-orm'
+import { and, desc, eq, getTableColumns, isNull, lt, not, or } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { db } from '@/db'
 import { users, videoReactions, videos, videoViews } from '@/db/schema'
+import { publicVideoCondition, requireVideo, viewerId } from '@/modules/videos/server/services/access'
 import { baseProcedure, createTRPCRouter, protectedProcedure } from '@/trpc/init'
 
 export const suggestionRouter = createTRPCRouter({
@@ -13,7 +14,7 @@ export const suggestionRouter = createTRPCRouter({
     const [video] = await db
       .select()
       .from(videos)
-      .where(and(eq(videos.id, id), eq(videos.userId, userId)))
+      .where(and(eq(videos.id, id), eq(videos.userId, userId), isNull(videos.deletionRequestedAt)))
 
     if (!video) {
       throw new TRPCError({ code: 'NOT_FOUND' })
@@ -33,12 +34,10 @@ export const suggestionRouter = createTRPCRouter({
         limit: z.number().min(1).max(100),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const { videoId, cursor, limit } = input
 
-      const [existingVideo] = await db.select().from(videos).where(eq(videos.id, videoId)).limit(1)
-
-      if (!existingVideo) throw new TRPCError({ code: 'NOT_FOUND' })
+      const existingVideo = await requireVideo(videoId, await viewerId(ctx.clerkUserId))
 
       const data = await db
         .select({
@@ -53,7 +52,7 @@ export const suggestionRouter = createTRPCRouter({
         .where(
           and(
             not(eq(videos.id, existingVideo.id)),
-            eq(videos.visibility, 'public'),
+            publicVideoCondition(),
             existingVideo.categoryId ? eq(videos.categoryId, existingVideo.categoryId) : undefined,
             cursor
               ? or(lt(videos.updatedAt, cursor.updatedAt), and(eq(videos.updatedAt, cursor.updatedAt), lt(videos.id, cursor.id)))

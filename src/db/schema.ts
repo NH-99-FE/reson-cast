@@ -1,4 +1,5 @@
-import { foreignKey, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
+import { check, foreignKey, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import { pgEnum } from 'drizzle-orm/pg-core/columns/enum'
 import { relations } from 'drizzle-orm/relations'
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod'
@@ -138,10 +139,14 @@ export const videos = pgTable('videos', {
   id: uuid('id').primaryKey().defaultRandom(),
   title: text('title').notNull(),
   description: text('description'),
+  deletionRequestedAt: timestamp('deletion_requested_at'),
+  deletionError: text('deletion_error'),
+  deletionRunId: uuid('deletion_run_id'),
   muxStatus: text('mux_status'),
   muxAssetId: text('mux_asset_id').unique(),
   muxUploadId: text('mux_upload_id').unique(),
   muxPlaybackId: text('mux_playback_id').unique(),
+  muxPlaybackIdToRevoke: text('mux_playback_id_to_revoke'),
   muxTrackId: text('mux_track_id').unique(),
   muxTrackStatus: text('muxTrack_status'),
   thumbnailUrl: text('thumbnail_url'),
@@ -162,11 +167,69 @@ export const videos = pgTable('videos', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 })
 
+// Product task state is independent of provider log retention and browser sessions.
+export const videoGenerationJobs = pgTable(
+  'video_generation_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    videoId: uuid('video_id')
+      .notNull()
+      .references(() => videos.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: ['title', 'description', 'thumbnail'] }).notNull(),
+    status: text('status', { enum: ['queued', 'running', 'completed', 'conflict', 'failed'] })
+      .notNull()
+      .default('queued'),
+    workflowRunId: text('workflow_run_id').notNull().unique(),
+    expectedValue: text('expected_value'),
+    prompt: text('prompt'),
+    result: text('result'),
+    error: text('error'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    finishedAt: timestamp('finished_at'),
+  },
+  table => [
+    check('video_generation_kind', sql`${table.kind} in ('title', 'description', 'thumbnail')`),
+    check('video_generation_status', sql`${table.status} in ('queued', 'running', 'completed', 'conflict', 'failed')`),
+    index('video_generation_latest').on(table.videoId, table.kind, table.createdAt.desc(), table.id.desc()),
+    uniqueIndex('video_generation_active')
+      .on(table.videoId, table.kind)
+      .where(sql`${table.status} in ('queued', 'running')`),
+  ]
+)
+
+// No FK: late callbacks and account/video deletion must not erase cleanup work.
+// Keep completed keys as tombstones so replayed uploads cannot reattach deleted files.
+export const videoFileCleanup = pgTable(
+  'video_file_cleanup',
+  {
+    key: text('key').primaryKey(),
+    videoId: uuid('video_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    error: text('error'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    cleanedAt: timestamp('cleaned_at'),
+  },
+  table => [
+    index('video_file_cleanup_pending')
+      .on(table.videoId)
+      .where(sql`${table.cleanedAt} is null`),
+  ]
+)
+
 export const videoInsertSchema = createInsertSchema(videos)
 
 export const videoSelectSchema = createSelectSchema(videos)
 
-export const videoUpdateSchema = createUpdateSchema(videos)
+export const videoUpdateSchema = createUpdateSchema(videos).pick({
+  id: true,
+  title: true,
+  description: true,
+  categoryId: true,
+  visibility: true,
+})
 
 export const categoryRelations = relations(categories, ({ many }) => ({ videos: many(videos) }))
 

@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { and, desc, eq, getTableColumns, lt, or } from 'drizzle-orm'
+import { and, desc, eq, getTableColumns, isNull, lt, or } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { db } from '@/db'
@@ -13,7 +13,7 @@ export const studioRouter = createTRPCRouter({
     const [video] = await db
       .select()
       .from(videos)
-      .where(and(eq(videos.id, id), eq(videos.userId, userId)))
+      .where(and(eq(videos.id, id), eq(videos.userId, userId), isNull(videos.deletionRequestedAt)))
 
     if (!video) {
       throw new TRPCError({ code: 'NOT_FOUND' })

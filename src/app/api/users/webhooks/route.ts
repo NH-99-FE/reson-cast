@@ -4,7 +4,8 @@ import { eq } from 'drizzle-orm'
 import { NextRequest } from 'next/server'
 
 import { db } from '@/db'
-import { users } from '@/db/schema'
+import { users, videos } from '@/db/schema'
+import { workflow } from '@/lib/workflow'
 
 export async function POST(req: NextRequest) {
   const evt = (await verifyWebhook(req)) as WebhookEvent
@@ -30,7 +31,15 @@ export async function POST(req: NextRequest) {
     case 'user.deleted': {
       const d = evt.data as DeletedObjectJSON
       if (!d.id) return new Response('Bad payload', { status: 400 }) // 确保不是 undefined
-      await db.delete(users).where(eq(users.clerkId, d.id))
+      const [user] = await db.select().from(users).where(eq(users.clerkId, d.id))
+      if (!user) break
+      await db.update(videos).set({ deletionRequestedAt: new Date() }).where(eq(videos.userId, user.id))
+      await workflow.trigger({
+        url: `${process.env.UPSTASH_WORKFLOW_URL}/api/users/workflows/delete`,
+        workflowRunId: `delete-user-${user.id}`,
+        body: { userId: user.id },
+        retries: 3,
+      })
       break
     }
   }

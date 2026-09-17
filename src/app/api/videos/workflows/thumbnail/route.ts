@@ -1,77 +1,43 @@
 import { serve } from '@upstash/workflow/nextjs'
-import { and, eq } from 'drizzle-orm'
 import { UTApi } from 'uploadthing/server'
 
-import { db } from '@/db'
-import { videos } from '@/db/schema'
+import { createImageAIRequest, type ImageAIResponse, readImageAIResult } from '@/lib/video-image-ai'
+import { authenticatedWorkflow } from '@/lib/workflow-auth'
+import { beginGeneration, failGeneration, isGenerationActive } from '@/modules/videos/server/services/generation'
+import { getGenerationVideo, thumbnailGenerationInput } from '@/modules/videos/server/services/generation-workflow'
+import { replaceVideoThumbnail } from '@/modules/videos/server/services/thumbnails'
 
-interface InputType {
-  userId: string
-  videoId: string
-  prompt: string
-}
-
-export const { POST } = serve(async context => {
-  const input = context.requestPayload as InputType
-  const { userId, videoId, prompt } = input
-  const utapi = new UTApi()
-
-  // 获取视频
-  const video = await context.run('get-video', async () => {
-    const [existingVideo] = await db
-      .select()
-      .from(videos)
-      .where(and(eq(videos.id, videoId), eq(videos.userId, userId)))
-    if (!existingVideo) {
-      throw new Error('Not found')
-    }
-    return existingVideo
-  })
-
-  const { body } = await context.call<{ images: Array<{ url: string }> }>('generate-thumbnail', {
-    url: 'https://api.siliconflow.cn/v1/images/generations',
-    method: 'POST',
-    body: {
-      model: 'Kwai-Kolors/Kolors',
-      prompt,
-      image_size: '1792x1024',
+const { POST: workflowPost } = serve(
+  async context => {
+    const video = await getGenerationVideo(context, thumbnailGenerationInput)
+    const input = video.generationInput ?? thumbnailGenerationInput.parse(context.requestPayload)
+    const { userId, videoId, prompt } = input
+    const job = input.jobId ? await context.run('start-job', () => beginGeneration(input.jobId!, videoId, userId, 'thumbnail')) : null
+    if (job && !isGenerationActive(job.status)) return { status: job.status }
+    if (input.jobId && !job) throw new Error('生成任务不存在')
+    const { status, body } = await context.call<ImageAIResponse>('generate-thumbnail', createImageAIRequest(prompt))
+    const imageUrl = readImageAIResult(status, body)
+    const upload = await context.run('upload-thumbnail', async () => {
+      const { data, error } = await new UTApi().uploadFilesFromUrl(imageUrl, { acl: 'private' })
+      if (error || !data) throw new Error('生成的封面上传失败')
+      return data
+    })
+    return context.run('update-video', () =>
+      replaceVideoThumbnail({
+        videoId,
+        userId,
+        expectedKey: job ? job.expectedValue : video.thumbnailKey,
+        newKey: upload.key,
+        jobId: input.jobId,
+      })
+    )
+  },
+  {
+    failureFunction: async ({ context }) => {
+      const input = thumbnailGenerationInput.parse(context.requestPayload)
+      if (input.jobId) await failGeneration(input.jobId)
     },
-    headers: {
-      Authorization: `Bearer ${process.env.SILICONDLOW_API_KEY}`,
-    },
-  })
-
-  const tempThumbnailUrl = body.images[0].url
-
-  if (!tempThumbnailUrl) {
-    throw new Error('Bad request')
   }
+)
 
-  await context.run('cleanup-thumbnail', async () => {
-    if (video.thumbnailKey) {
-      await utapi.deleteFiles(video.thumbnailKey)
-      await db
-        .update(videos)
-        .set({
-          thumbnailKey: null,
-          thumbnailUrl: null,
-        })
-        .where(and(eq(videos.id, videoId), eq(videos.userId, userId)))
-    }
-  })
-
-  const uploadtempThumbnail = await context.run('upload-thumbnailUrl', async () => {
-    const { data, error } = await utapi.uploadFilesFromUrl(tempThumbnailUrl)
-    if (error) {
-      throw new Error('Bad request')
-    }
-    return data
-  })
-
-  await context.run('update-video', async () => {
-    await db
-      .update(videos)
-      .set({ thumbnailUrl: uploadtempThumbnail.url, thumbnailKey: uploadtempThumbnail.key })
-      .where(and(eq(videos.id, videoId), eq(videos.userId, userId)))
-  })
-})
+export const POST = authenticatedWorkflow(workflowPost)

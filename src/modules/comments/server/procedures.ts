@@ -5,12 +5,14 @@ import { z } from 'zod'
 
 import { db } from '@/db'
 import { commentReactions, comments, users, videos } from '@/db/schema'
+import { requireComment, requireVideo, viewerId } from '@/modules/videos/server/services/access'
 import { baseProcedure, createTRPCRouter, protectedProcedure } from '@/trpc/init'
 
 export const commentsRouter = createTRPCRouter({
   remove: protectedProcedure.input(z.object({ id: z.uuid() })).mutation(async ({ input, ctx }) => {
     const { id } = input
     const { id: userId } = ctx.user
+    await requireComment(id, userId)
 
     // 先查询评论和对应的视频信息
     const [commentWithVideo] = await db
@@ -49,6 +51,7 @@ export const commentsRouter = createTRPCRouter({
     )
     .mutation(async ({ input, ctx }) => {
       const { videoId, value, parentId } = input
+      await requireVideo(videoId, ctx.user.id)
       const { id: userId } = ctx.user
 
       const [existingComment] = await db
@@ -56,7 +59,7 @@ export const commentsRouter = createTRPCRouter({
         .from(comments)
         .where(inArray(comments.id, parentId ? [parentId] : []))
 
-      if (!existingComment && parentId) throw new TRPCError({ code: 'NOT_FOUND' })
+      if (parentId && (!existingComment || existingComment.videoId !== videoId)) throw new TRPCError({ code: 'NOT_FOUND' })
 
       if (existingComment?.parentId && parentId) {
         throw new TRPCError({ code: 'BAD_REQUEST' })
@@ -76,17 +79,8 @@ export const commentsRouter = createTRPCRouter({
     )
     .query(async ({ input, ctx }) => {
       const { parentId, videoId, cursor, limit } = input
-      const { clerkUserId } = ctx
-
-      let userId
-
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(inArray(users.clerkId, clerkUserId ? [clerkUserId] : []))
-      if (user) {
-        userId = user.id
-      }
+      const userId = await viewerId(ctx.clerkUserId)
+      await requireVideo(videoId, userId)
       const viewerReactions = db.$with('viewer_reactions').as(
         db
           .select({
