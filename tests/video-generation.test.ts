@@ -4,6 +4,7 @@ import test from 'node:test'
 import type { NeonQueryFunction } from '@neondatabase/serverless'
 import { drizzle } from 'drizzle-orm/neon-http'
 
+import { dirtyVideoPatch } from '../src/modules/studio/ui/hooks/video-form-values'
 import { saveGeneratedVideo } from '../src/modules/videos/server/services/legacy-generation-save'
 
 const id = 'a4bde311-19f3-4d77-9c55-69a43f5c2168'
@@ -42,4 +43,16 @@ test('no matched row is a conflict; database errors propagate instead of marking
     throw new Error('offline')
   }) as unknown as NeonQueryFunction<false, false>
   await assert.rejects(saveGeneratedVideo(drizzle(broken), { videoId: id, userId: 'owner' }, 'title', 'old', 'new'))
+})
+
+test('partial saves omit generating and clean fields while retaining explicit null', () => {
+  assert.deepEqual(
+    dirtyVideoPatch(
+      { title: 'old', description: null, categoryId: null, visibility: 'private' },
+      { title: true, description: true, categoryId: true },
+      { title: true }
+    ),
+    { description: null, categoryId: null }
+  )
+  assert.deepEqual(dirtyVideoPatch({ title: 'old' }, {}, {}), {})
 })

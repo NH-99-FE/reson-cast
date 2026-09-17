@@ -1,5 +1,6 @@
 'use client'
 
+import { useAuth } from '@clerk/nextjs'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   CopyCheckIcon,
@@ -9,6 +10,7 @@ import {
   Loader2Icon,
   LockIcon,
   MoreVerticalIcon,
+  RefreshCwIcon,
   RotateCcwIcon,
   SaveIcon,
   SparklesIcon,
@@ -17,7 +19,7 @@ import {
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Suspense, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -30,11 +32,15 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { APP_URL } from '@/constants'
 import { videoUpdateSchema } from '@/db/schema'
 import { formatVideoStatus } from '@/lib/utils'
 import { ThumbnailGenerateModal } from '@/modules/studio/ui/components/thumbnail-generate-modal'
 import { ThumbnailUploadModal } from '@/modules/studio/ui/components/thumbnail-upload-modal'
+import { useGenerationTask } from '@/modules/studio/ui/hooks/use-generation-task'
+import { useTextGeneration } from '@/modules/studio/ui/hooks/use-text-generation'
+import { dirtyVideoPatch, editableVideoFields } from '@/modules/studio/ui/hooks/video-form-values'
 import { THUMBNAIL_FALLBACK } from '@/modules/videos/constants'
 import { VideoPlayer } from '@/modules/videos/ui/components/video-player'
 import { trpc } from '@/trpc/client'
@@ -43,11 +49,39 @@ interface FormSectionProps {
   videoId: string
 }
 
+const GenerationRetryButton = ({ label, disabled, onRetry }: { label: string; disabled: boolean; onRetry: () => void }) => {
+  if (label !== '重试查询') {
+    return (
+      <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={onRetry}>
+        {label}
+      </Button>
+    )
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="size-8 shrink-0"
+          aria-label="重试查询"
+          disabled={disabled}
+          onClick={onRetry}
+        >
+          <RefreshCwIcon className="size-4" aria-hidden="true" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>点击重试</TooltipContent>
+    </Tooltip>
+  )
+}
+
 export const FormSection = ({ videoId }: FormSectionProps) => {
   return (
     <Suspense fallback={<FormSectionSkeleton />}>
       <ErrorBoundary fallback={<p>出错了！</p>}>
-        <FormSectionSuspense videoId={videoId} />
+        <FormSectionSuspense key={videoId} videoId={videoId} />
       </ErrorBoundary>
     </Suspense>
   )
@@ -111,31 +145,56 @@ const FormSectionSkeleton = () => {
 }
 
 const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
+  const { userId: accountId } = useAuth()
   const router = useRouter()
   const utils = trpc.useUtils()
-  const refreshVideo = () => {
-    void utils.studio.getOne.invalidate({ id: videoId })
-    void utils.studio.getMany.invalidate()
-    void utils.videos.invalidate()
-    void utils.search.invalidate()
-    void utils.playlists.invalidate()
-  }
 
+  const [thumbnailGenerateModalOpen, setThumbnailGenerateModalOpen] = useState(false)
   const [thumbnailModalOpen, setThumbnailModalOpen] = useState<boolean>(false)
-  const [thumbnailGenerateModalOpen, setThumbnailGenerateModalOpen] = useState<boolean>(false)
 
   const [video] = trpc.studio.getOne.useSuspenseQuery({ id: videoId })
   const [categories] = trpc.categories.getMany.useSuspenseQuery()
 
+  const form = useForm<z.infer<typeof videoUpdateSchema>>({
+    resolver: zodResolver(videoUpdateSchema),
+    defaultValues: video,
+  })
+  const mounted = useRef(false)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+  const refreshRelated = useCallback(() => {
+    void utils.studio.getMany.invalidate()
+    void utils.videos.invalidate()
+    void utils.search.invalidate()
+    void utils.playlists.invalidate()
+  }, [utils])
+  const refreshVideo = () => {
+    void utils.studio.getOne.invalidate({ id: videoId })
+    refreshRelated()
+  }
+
   const update = trpc.videos.update.useMutation({
-    onSuccess: () => {
-      // 旧缓存失效
-      utils.studio.getMany.invalidate()
-      utils.studio.getOne.invalidate({ id: videoId })
+    onSuccess: (saved, submitted) => {
+      if (!mounted.current) return
+      for (const key of editableVideoFields) {
+        if (!Object.hasOwn(submitted, key)) continue
+        const latest = form.getValues(key)
+        form.resetField(key, { defaultValue: saved[key] })
+        // Preserve edits typed while this save was in flight, against the new baseline.
+        if (latest !== submitted[key]) form.setValue(key, latest, { shouldDirty: true })
+      }
+      utils.studio.getOne.setData({ id: videoId }, saved)
+      refreshRelated()
       toast.success('更新成功')
     },
-    onError: () => {
-      toast.error('更新失败')
+    onError: error => {
+      if (!mounted.current) return
+      refreshVideo()
+      toast.error(error.message || '更新失败')
     },
   })
 
@@ -178,35 +237,18 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
     onError: () => toast.error('恢复失败'),
   })
 
-  // AI生成标题
-  const generateTitle = trpc.videos.generateTitle.useMutation({
-    onSuccess: () => {
-      toast.success('AI开始在后台处理')
-    },
-    onError: () => {
-      toast.error('AI生成失败')
-    },
-  })
-
-  // AI生成简介
-  const generateDescription = trpc.videos.generateDescription.useMutation({
-    onSuccess: () => {
-      toast.success('AI开始在后台处理')
-    },
-    onError: () => {
-      toast.error('AI生成失败')
+  const titleGeneration = useTextGeneration({ accountId, videoId, kind: 'title', form, onSaved: refreshRelated })
+  const descriptionGeneration = useTextGeneration({ accountId, videoId, kind: 'description', form, onSaved: refreshRelated })
+  const thumbnailGeneration = useGenerationTask({
+    accountId,
+    videoId,
+    kind: 'thumbnail',
+    onSettled: async () => {
+      const fresh = await utils.client.studio.getOne.query({ id: videoId })
+      utils.studio.getOne.setData({ id: videoId }, fresh)
+      refreshRelated()
     },
   })
-
-  const form = useForm<z.infer<typeof videoUpdateSchema>>({
-    resolver: zodResolver(videoUpdateSchema),
-    defaultValues: video,
-  })
-
-  const onSubmit = async (data: z.infer<typeof videoUpdateSchema>) => {
-    await update.mutate(data)
-  }
-
   const cleanup = trpc.videos.getPendingFileCleanup.useQuery({ id: videoId })
   const retryCleanup = trpc.videos.retryFileCleanup.useMutation({
     onSuccess: result => {
@@ -216,6 +258,12 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
     },
     onError: () => toast.error('清理失败，请稍后重试'),
   })
+  const locked = { title: titleGeneration.fieldLocked, description: descriptionGeneration.fieldLocked }
+  const patch = dirtyVideoPatch(form.getValues(), form.formState.dirtyFields, locked)
+  const onSubmit = (data: z.infer<typeof videoUpdateSchema>) => {
+    const changes = dirtyVideoPatch(data, form.formState.dirtyFields, locked)
+    if (!update.isPending && Object.keys(changes).length) update.mutate({ id: videoId, ...changes })
+  }
 
   const fullUrl = `${APP_URL}/videos/${videoId}`
 
@@ -229,7 +277,12 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
   }
   return (
     <>
-      <ThumbnailGenerateModal videoId={videoId} open={thumbnailGenerateModalOpen} onOpenChange={setThumbnailGenerateModalOpen} />
+      <ThumbnailGenerateModal
+        generating={thumbnailGeneration.locked}
+        onGenerate={prompt => thumbnailGeneration.start(prompt)}
+        open={thumbnailGenerateModalOpen}
+        onOpenChange={setThumbnailGenerateModalOpen}
+      />
       <ThumbnailUploadModal open={thumbnailModalOpen} onOpenChange={setThumbnailModalOpen} videoId={videoId} />
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -239,7 +292,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
               <p className="text-xs text-muted-foreground">管理你的视频</p>
             </div>
             <div className="flex items-center gap-x-2">
-              <Button type="submit" variant="outline" disabled={update.isPending || !form.formState.isDirty}>
+              <Button type="submit" variant="outline" disabled={update.isPending || !Object.keys(patch).length}>
                 {update.isPending ? <Loader2Icon className="w-8 animate-spin" /> : <SaveIcon />}
                 保存
               </Button>
@@ -291,16 +344,44 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                           type="button"
                           size="icon"
                           className="size-6 rounded-full"
-                          onClick={() => generateTitle.mutate({ id: videoId })}
-                          disabled={generateTitle.isPending || !video.muxTrackId}
+                          onClick={() => titleGeneration.start()}
+                          aria-label="AI 生成标题"
+                          title={
+                            form.formState.dirtyFields.title ? '请先保存该字段' : video.muxTrackId ? 'AI 生成标题' : '视频字幕尚未就绪'
+                          }
+                          disabled={titleGeneration.locked || update.isPending || !!form.formState.dirtyFields.title || !video.muxTrackId}
                         >
-                          {generateTitle.isPending ? <Loader2Icon className="size-3 animate-spin" /> : <SparklesIcon className="size-3" />}
+                          {titleGeneration.loading ? <Loader2Icon className="size-3 animate-spin" /> : <SparklesIcon className="size-3" />}
                         </Button>
                       </div>
                     </FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="在此添加视频标题" />
+                      <Input {...field} disabled={titleGeneration.fieldLocked} placeholder="在此添加视频标题" />
                     </FormControl>
+                    {titleGeneration.message && (
+                      <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>{titleGeneration.message}</span>
+                        {titleGeneration.retryLabel && (
+                          <GenerationRetryButton
+                            label={titleGeneration.retryLabel}
+                            disabled={titleGeneration.syncing}
+                            onRetry={() => void titleGeneration.resume()}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {titleGeneration.suggestion && !titleGeneration.locked && (
+                      <details className="text-sm">
+                        <summary>查看未采用的生成结果</summary>
+                        <p className="my-2 whitespace-pre-wrap">{titleGeneration.suggestion}</p>
+                        <Button type="button" size="sm" variant="outline" onClick={titleGeneration.adoptSuggestion}>
+                          采用到编辑框
+                        </Button>
+                      </details>
+                    )}
+                    {form.formState.dirtyFields.title && !titleGeneration.locked && (
+                      <p className="text-xs text-muted-foreground">请先保存该字段，再生成</p>
+                    )}
                   </FormItem>
                 )}
               />
@@ -318,10 +399,23 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                           type="button"
                           size="icon"
                           className="size-6 rounded-full"
-                          onClick={() => generateDescription.mutate({ id: videoId })}
-                          disabled={generateDescription.isPending || !video.muxTrackId}
+                          onClick={() => descriptionGeneration.start()}
+                          aria-label="AI 生成简介"
+                          title={
+                            form.formState.dirtyFields.description
+                              ? '请先保存该字段'
+                              : video.muxTrackId
+                                ? 'AI 生成简介'
+                                : '视频字幕尚未就绪'
+                          }
+                          disabled={
+                            descriptionGeneration.locked ||
+                            update.isPending ||
+                            !!form.formState.dirtyFields.description ||
+                            !video.muxTrackId
+                          }
                         >
-                          {generateDescription.isPending ? (
+                          {descriptionGeneration.loading ? (
                             <Loader2Icon className="size-3 animate-spin" />
                           ) : (
                             <SparklesIcon className="size-3" />
@@ -332,6 +426,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                     <FormControl>
                       <Textarea
                         {...field}
+                        disabled={descriptionGeneration.fieldLocked}
                         value={field.value ?? ''}
                         rows={10}
                         placeholder="在此添加视频介绍"
@@ -339,6 +434,30 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                       />
                     </FormControl>
                     <FormMessage />
+                    {descriptionGeneration.message && (
+                      <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>{descriptionGeneration.message}</span>
+                        {descriptionGeneration.retryLabel && (
+                          <GenerationRetryButton
+                            label={descriptionGeneration.retryLabel}
+                            disabled={descriptionGeneration.syncing}
+                            onRetry={() => void descriptionGeneration.resume()}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {descriptionGeneration.suggestion && !descriptionGeneration.locked && (
+                      <details className="text-sm">
+                        <summary>查看未采用的生成结果</summary>
+                        <p className="my-2 whitespace-pre-wrap">{descriptionGeneration.suggestion}</p>
+                        <Button type="button" size="sm" variant="outline" onClick={descriptionGeneration.adoptSuggestion}>
+                          采用到编辑框
+                        </Button>
+                      </details>
+                    )}
+                    {form.formState.dirtyFields.description && !descriptionGeneration.locked && (
+                      <p className="text-xs text-muted-foreground">请先保存该字段，再生成</p>
+                    )}
                   </FormItem>
                 )}
               />
@@ -370,7 +489,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                         <ImagePlusIcon className="mr-2 size-4" />
                         <span>修改</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setThumbnailGenerateModalOpen(true)}>
+                      <DropdownMenuItem disabled={thumbnailGeneration.locked} onClick={() => setThumbnailGenerateModalOpen(true)}>
                         <SparklesIcon className="mr-2 size-4" />
                         <span>AI生成</span>
                       </DropdownMenuItem>
@@ -382,6 +501,18 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                   </DropdownMenu>
                 </div>
               </FormItem>
+              {thumbnailGeneration.message && (
+                <div role="status" className="flex items-center gap-2 text-sm">
+                  <span>{thumbnailGeneration.message}</span>
+                  {thumbnailGeneration.retryLabel && (
+                    <GenerationRetryButton
+                      label={thumbnailGeneration.retryLabel}
+                      disabled={thumbnailGeneration.syncing}
+                      onRetry={() => void thumbnailGeneration.resume()}
+                    />
+                  )}
+                </div>
+              )}
               {!!cleanup.data?.count && (
                 <div role="status" className="flex items-center gap-2 text-sm">
                   <span>有 {cleanup.data.count} 个旧封面文件等待清理，不影响当前封面。</span>
@@ -403,7 +534,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>类别</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value ?? undefined}>
+                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="请选择一个类别" />
@@ -469,7 +600,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>谁可以看</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value ?? undefined}>
+                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
                       <FormControl>
                         <SelectTrigger className="w-full">
                           <SelectValue placeholder="请选择谁可以看" />

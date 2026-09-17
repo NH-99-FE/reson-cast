@@ -10,7 +10,7 @@
 
 ## 📖 项目简介
 
-Reson Cast 是一个功能完整的现代化视频分享平台，类似 YouTube。项目采用 Next.js 15 全栈架构，实现了完整的视频分享平台，构建了用户认证订阅、视频点赞评论、多层级回复等社交互动体系，提供搜索分类、个性化推荐、热门内容等内容发现机制，以及面向创作者的视频管理工作台同时集成 AI 智能生成标题简介封面功能。
+Reson Cast 是一个功能完整的现代化视频分享平台，类似 YouTube。项目采用 Next.js 15 全栈架构，实现了完整的视频分享平台，构建了用户认证订阅、视频点赞评论、多层级回复等社交互动体系，提供搜索分类、个性化推荐、热门内容等内容发现机制，以及面向创作者的视频管理工作台同时集成 DeepSeek 智能生成标题和简介功能。
 
 <div align="center">
   <a href="https://reson-cast.lhiyn.xyz/" target="_blank">
@@ -21,7 +21,7 @@ Reson Cast 是一个功能完整的现代化视频分享平台，类似 YouTube�
 ### ✨ 核心特性
 
 - 🎥 **视频管理** - 支持视频上传、删除、分享
-- 🤖 **AI 智能生成** - 基于视频内容自动生成标题、简介和封面
+- 🤖 **AI 智能生成** - 基于视频字幕自动生成标题和简介
 - 👥 **用户系统** - 完整的身份认证、用户资料、订阅关系管理
 - 💬 **社交互动** - 视频点赞评论、多层级回复、播放列表
 - 🔍 **内容发现** - 搜索功能、分类浏览、个性化推荐
@@ -45,7 +45,7 @@ Reson Cast 是一个功能完整的现代化视频分享平台，类似 YouTube�
 - **身份认证**: Clerk
 - **缓存限流**: Upstash Redis
 - **视频处理**: Mux
-- **AI 服务**: 大模型 API 集成
+- **AI 服务**: DeepSeek Flash（非思考模式）
 
 ### 开发工具
 
@@ -93,8 +93,10 @@ MUX_TOKEN_SECRET="your-mux-token-secret"
 UPSTASH_REDIS_REST_URL="your-redis-url"
 UPSTASH_REDIS_REST_TOKEN="your-redis-token"
 
-# AI 服务
-SILICONDLOW_API_KEY="your-ai-api-key"
+# DeepSeek（仅服务端）
+AI_API_URL="https://api.deepseek.com"
+API_KEY="your-deepseek-api-key"
+MODEL_ID="deepseek-flash"
 
 # Upstash Workflow
 QSTASH_TOKEN="your-qstash-token"
@@ -168,7 +170,7 @@ src/
 
 - 基于视频字幕自动生成标题
 - 智能生成视频简介
-- AI 图像生成视频封面
+- 封面支持手动上传、Mux 默认封面和独立配置的 AI 生图服务
 - 异步处理工作流
 
 ### 用户体验
@@ -229,3 +231,35 @@ src/
 <div align="center">
   Made with ❤️ llh
 </div>
+
+
+### DeepSeek 配置与验证
+
+标题和简介共用 `src/lib/video-ai.ts`，读取 `API_KEY`、`AI_API_URL`、`MODEL_ID`。
+默认使用 `deepseek-flash`，关闭思考模式并限制输出长度；需要更高质量时可以将 `MODEL_ID` 改为 `deepseek-v4-pro`。
+AI 密钥仅供服务端使用，不要添加 `NEXT_PUBLIC_` 前缀。
+
+本地配置 `.env` 后重启开发服务。线上需要在 Vercel 配置同名变量并重新部署。
+`UPSTASH_WORKFLOW_URL` 必须指向运行新代码、QStash 可以访问的 HTTPS 地址；
+若它仍指向 Vercel，本地点击生成也会执行线上工作流。测试本地工作流时请使用公网隧道地址。
+
+```bash
+# 使用最新视频字幕实测标题和简介；会消耗少量 DeepSeek 额度，不写入数据库
+RUN_AI_TEST=1 pnpm exec tsx scripts/verify-video-ai.ts
+```
+
+此脚本验证 Mux 字幕读取和 DeepSeek 调用，不包含 QStash 调度或数据库写回。
+部署后从工作台分别触发标题、简介生成，完成后自动保存并同步对应表单字段；并发修改保留生成建议供手动采用，不覆盖其他页面的修改。任务状态保存在数据库，可跨页面恢复。部署前应用 `scripts/sql/add-video-generation-jobs.sql`。详见 [AI 生成与保存](docs/video-generation.md)。
+DeepSeek 未提供图片生成接口，AI 封面使用独立服务。未配置时入口会提示“AI 封面服务尚未配置”，不会提交工作流。
+
+```env
+# 完整生图接口 URL（包含 images/generations 等实际路径）
+IMAGE_AI_API_URL=
+IMAGE_AI_API_KEY=
+IMAGE_AI_MODEL=
+```
+
+当前适配同步 JSON 生图接口：Bearer 鉴权，请求 `{ model, prompt }`，使用模型默认尺寸；
+响应支持 `data[0].url` 或 `images[0].url`（HTTPS 图片链接）。配置兼容服务后即可使用。
+只返回 Base64、异步任务 ID，或需要额外必填参数的模型需要补充适配，不能只换模型名。
+图片仍通过 UploadThing 私密上传，并沿用删除保护和旧封面清理逻辑。

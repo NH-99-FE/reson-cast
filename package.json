@@ -18,7 +18,9 @@
     "db:seed": "tsx src/scripts/seed-categories.ts",
     "db:view": "drizzle-kit studio",
     "test": "node --import tsx --test tests/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "test:ui": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "test:ui:serve": "node scripts/verify-generation-ui.mjs"
   },
   "config": {
     "commitizen": {
