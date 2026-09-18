@@ -100,20 +100,28 @@ test('duplicate resource IDs are deleted only once and missing uploads do not bl
 test('workflow fails closed with missing signing keys', async () => {
   const saved = [process.env.QSTASH_CURRENT_SIGNING_KEY, process.env.QSTASH_NEXT_SIGNING_KEY]
   let called = false
+  const scheduled: unknown[] = []
   try {
     delete process.env.QSTASH_CURRENT_SIGNING_KEY
     delete process.env.QSTASH_NEXT_SIGNING_KEY
-    const post = authenticatedWorkflow(async () => {
-      called = true
-      return new Response('OK')
-    })
+    const post = authenticatedWorkflow(
+      async () => {
+        called = true
+        return new Response('OK')
+      },
+      callback => {
+        scheduled.push(callback)
+      }
+    )
     assert.equal((await post(new Request('https://example.test'))).status, 503)
     process.env.QSTASH_CURRENT_SIGNING_KEY = 'current'
     assert.equal((await post(new Request('https://example.test'))).status, 503)
     assert.equal(called, false)
     process.env.QSTASH_NEXT_SIGNING_KEY = 'next'
     assert.equal((await post(new Request('https://example.test'))).status, 401)
+    assert.equal(scheduled.length, 0)
     assert.equal((await post(new Request('https://example.test', { headers: { 'upstash-signature': 'sdk-verifies-this' } }))).status, 200)
+    assert.equal(scheduled.length, 1)
   } finally {
     for (const [index, key] of ['QSTASH_CURRENT_SIGNING_KEY', 'QSTASH_NEXT_SIGNING_KEY'].entries()) {
       if (saved[index] === undefined) delete process.env[key]

@@ -400,3 +400,37 @@ export const commentReactionRelations = relations(commentReactions, ({ one }) =>
     references: [comments.id],
   }),
 }))
+
+// No foreign keys: deleting business rows must not erase undelivered events.
+// Transactional capture triggers are installed by scripts/sql/add-realtime-outbox.sql.
+export const realtimeOutbox = pgTable(
+  'realtime_outbox',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull(),
+    videoId: uuid('video_id').notNull(),
+    type: text('type').notNull(),
+    jobId: uuid('job_id'),
+    kind: text('kind'),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+    leaseUntil: timestamp('lease_until', { withTimezone: true }),
+    leaseToken: uuid('lease_token'),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    failedAt: timestamp('failed_at', { withTimezone: true }),
+    lastError: text('last_error'),
+  },
+  table => [
+    check('realtime_outbox_type_check', sql`${table.type} in ('video.changed', 'generation.changed', 'deletion.changed')`),
+    check('realtime_outbox_kind_check', sql`${table.kind} in ('title', 'description', 'thumbnail')`),
+    check('realtime_outbox_version_check', sql`${table.version} = 1`),
+    index('realtime_outbox_pending')
+      .on(table.nextAttemptAt)
+      .where(sql`${table.sentAt} is null and ${table.failedAt} is null`),
+    index('realtime_outbox_sent')
+      .on(table.sentAt)
+      .where(sql`${table.sentAt} is not null`),
+  ]
+)

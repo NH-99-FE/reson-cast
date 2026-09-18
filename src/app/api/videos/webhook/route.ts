@@ -1,13 +1,15 @@
 import { and, eq, isNull, or } from 'drizzle-orm'
+import { after } from 'next/server'
 
 import { db } from '@/db'
 import { videos } from '@/db/schema'
 import { mux } from '@/lib/mux'
+import { wakeOutbox } from '@/lib/realtime/server'
 import { isMissing } from '@/lib/video-cleanup'
 import { imagePath } from '@/lib/video-media'
 import { requestVideoDeletion } from '@/modules/videos/server/services/deletion'
 
-export async function POST(request: Request) {
+async function handleWebhook(request: Request) {
   const secret = process.env.MUX_WEBHOOK_SECRET
   if (!secret) return new Response('Webhook is not configured', { status: 503 })
   let event
@@ -83,4 +85,10 @@ export async function POST(request: Request) {
     }
   }
   return new Response('OK')
+}
+
+export async function POST(request: Request) {
+  const response = await handleWebhook(request)
+  if (response.ok) after(wakeOutbox)
+  return response
 }

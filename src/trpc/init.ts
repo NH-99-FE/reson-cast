@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { initTRPC, TRPCError } from '@trpc/server'
 import { eq } from 'drizzle-orm'
+import { after } from 'next/server'
 import { cache } from 'react'
 import superjson from 'superjson'
 
@@ -49,10 +50,17 @@ export const protectedProcedure = t.procedure.use(async function isAuthed(opts) 
     throw new TRPCError({ code: 'TOO_MANY_REQUESTS' })
   }
 
-  return opts.next({
+  const result = await opts.next({
     ctx: {
       ...ctx,
       user,
     },
   })
+  if (opts.type === 'mutation') {
+    after(async () => {
+      const { wakeOutbox } = await import('@/lib/realtime/server')
+      await wakeOutbox()
+    })
+  }
+  return result
 })
