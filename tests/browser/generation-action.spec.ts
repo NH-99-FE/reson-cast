@@ -1,0 +1,37 @@
+import { expect, test } from '@playwright/test'
+
+test('keyboard users can enter recovery, escape, reopen and resume', async ({ page }) => {
+  await page.goto('/generation-action')
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('button', { name: '前一个控件' })).toBeFocused()
+  await page.keyboard.press('Tab')
+  const recovery = page.getByRole('button', { name: '继续查询' })
+  const trigger = page.getByRole('button', { name: '标题生成需要处理' })
+  await expect(recovery).toBeFocused()
+  // Wait past the delayed close to catch focus/blur races.
+  await page.waitForTimeout(300)
+  await expect(recovery).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(trigger).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(recovery).toBeFocused()
+  await page.keyboard.press('Space')
+  await expect(page.getByLabel('恢复次数')).toHaveText('1')
+  await expect(trigger).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('button', { name: '后一个控件' })).toBeFocused()
+})
+
+test('hover previews preserve focus and pointer recovery remains usable', async ({ page }) => {
+  await page.goto('/generation-action')
+  const previous = page.getByRole('button', { name: '前一个控件' })
+  await previous.focus()
+  await page.getByRole('button', { name: '标题生成需要处理' }).hover()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(previous).toBeFocused()
+  await page.getByRole('button', { name: '继续查询' }).click()
+  await expect(page.getByLabel('恢复次数')).toHaveText('1')
+  await page.getByRole('button', { name: '后一个控件' }).click()
+  await expect(page.getByRole('button', { name: '后一个控件' })).toBeFocused()
+})

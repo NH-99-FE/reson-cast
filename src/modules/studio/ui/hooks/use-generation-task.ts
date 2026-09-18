@@ -162,13 +162,14 @@ export function useGenerationTask({
       (phase.name === 'restoring' && query.isFetching) ||
       (phase.name === 'waiting' && !query.isError),
     syncing: phase.name === 'syncing' || phase.name === 'submitting',
+    paused: phase.name === 'paused' && !query.isError && !job?.error,
     message:
       phase.name === 'sync-error'
         ? '内容同步失败，请重试同步'
         : query.isError
           ? '进度查询暂时失败，可重试查询'
           : phase.name === 'paused'
-            ? '后台仍可能处理中'
+            ? '已暂停自动查询，后台仍可能处理中'
             : job?.status === 'queued' && job.error
               ? job.error
               : active(job) || phase.name === 'submitting'

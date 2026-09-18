@@ -69,7 +69,25 @@ const interactions = await build({
   ],
 })
 const bundle = result.outputFiles[0].contents
+const recoveryExample = await build({
+  entryPoints: ['tests/browser/generation-action-ui.jsx'],
+  bundle: true,
+  write: false,
+  jsx: 'automatic',
+  format: 'iife',
+  define: { 'process.env.NODE_ENV': '"development"' },
+})
 createServer((request, response) => {
+  if (request.url === '/generation-action.js') {
+    response.setHeader('content-type', 'text/javascript')
+    response.end(recoveryExample.outputFiles[0].contents)
+    return
+  }
+  if (request.url === '/generation-action') {
+    response.setHeader('content-type', 'text/html; charset=utf-8')
+    response.end('<!doctype html><html><body><div id="root"></div><script src="/generation-action.js"></script></body></html>')
+    return
+  }
   if (request.url === '/interactions.js') {
     response.setHeader('content-type', 'text/javascript')
     response.end(interactions.outputFiles[0].contents)

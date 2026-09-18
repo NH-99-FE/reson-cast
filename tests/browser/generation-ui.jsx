@@ -24,7 +24,17 @@ const wait = async fn => {
 const title = () => document.querySelector('input[name="title"]')
 const desc = () => document.querySelector('textarea[name="description"]')
 const button = label =>
-  [...document.querySelectorAll('button')].find(el => el.textContent.trim() === label || el.getAttribute('aria-label') === label)
+  [...document.querySelectorAll('[data-slot=popover-content] button'), ...document.querySelectorAll('button')].find(
+    el =>
+      el.textContent.trim() === label ||
+      el.getAttribute('aria-label') === label ||
+      (label.startsWith('AI 生成') && el.getAttribute('aria-label') === `${label.slice(5)}生成需要处理`)
+  )
+const openRecovery = async (label, field = '标题') => {
+  await wait(() => button(`${field}生成需要处理`))
+  button(`${field}生成需要处理`).click()
+  await wait(() => button(label))
+}
 const edit = (el, value) => {
   const prototype = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
   Object.getOwnPropertyDescriptor(prototype, 'value').set.call(el, value)
@@ -76,18 +86,22 @@ async function run() {
         <FormSection videoId={videoId} />
       </TestProvider>
     )
-    await wait(() => button('重试查询'))
+    await openRecovery('重试查询')
     check(!button('AI 生成标题').querySelector('.animate-spin'), 'failed title query spins forever')
     check(!button('AI 生成简介').querySelector('.animate-spin'), 'failed description query spins forever')
     check(!title().disabled && !desc().disabled, 'status failure blocks normal editing')
-    check(button('AI 生成标题').disabled && button('AI 生成简介').disabled, 'unknown status allows generation')
+    check(button('标题生成需要处理') && button('简介生成需要处理'), 'unknown status must show recovery icons')
     edit(title(), 'Saved while status unavailable')
     await wait(() => !button('保存').disabled)
     button('保存').click()
     await wait(() => state.video.title === 'Saved while status unavailable' && button('保存').disabled)
-    check(button('AI 生成标题').disabled, 'failed background query allows generation after saving')
+    check(button('标题生成需要处理'), 'failed background query must retain recovery icon after saving')
     state.failPolls = false
-    for (const retry of [...document.querySelectorAll('button')].filter(el => el.getAttribute('aria-label') === '重试查询')) retry.click()
+    button('重试查询').click()
+    await wait(() => !button('标题生成需要处理') && !document.querySelector('[data-slot=popover-content]'))
+    await openRecovery('重试查询', '简介')
+    button('重试查询').click()
+    await wait(() => !button('标题生成需要处理') && !button('简介生成需要处理'))
     await wait(() => !button('AI 生成标题').disabled && !button('AI 生成简介').disabled)
   })
   await test('dirty target blocks generation; saving sets a clean baseline', async () => {
@@ -157,7 +171,7 @@ async function run() {
     state.video.title = 'Other page title'
     latestRun('title').status = 'conflict'
     latestRun('title').result = 'Generated suggestion'
-    await wait(() => button('重试同步'))
+    await openRecovery('重试同步')
     check(title().disabled, 'sync failure must retain lock')
     check(!button('AI 生成标题').querySelector('.animate-spin'), 'failed synchronization keeps spinning')
     state.failDetails = false
@@ -190,7 +204,7 @@ async function run() {
   await test('timeout keeps the lock and record; continue querying completes the same task', async () => {
     shortenDeadline = true
     button('AI 生成标题').click()
-    await wait(() => button('继续查询'))
+    await openRecovery('继续查询')
     check(title().disabled && latestRun('title').status === 'running', 'timeout unlocked or erased server task')
     check(!button('AI 生成标题').querySelector('.animate-spin'), 'paused query keeps spinning')
     const polls = state.polls
@@ -229,7 +243,8 @@ async function run() {
     state.delayedStatusStarted = false
     void state.refresh()
     await wait(() => state.delayedStatusStarted)
-    button('AI 生成标题').click()
+    await openRecovery('重新生成')
+    button('重新生成').click()
     await wait(() => title().disabled && latestRun('title').status === 'running')
     await delay(450)
     check(title().disabled, 'late status response unlocked a running task')
@@ -238,7 +253,7 @@ async function run() {
   await test('failed dispatch retries the same durable job', async () => {
     state.dispatchFails = true
     button('AI 生成标题').click()
-    await wait(() => button('重新提交'))
+    await openRecovery('重新提交')
     const originalId = latestRun('title').id
     state.dispatchFails = false
     button('重新提交').click()
@@ -251,7 +266,7 @@ async function run() {
     await wait(() => title().disabled && latestRun('title').status === 'running')
     const originalId = latestRun('title').id
     state.failPolls = true
-    await wait(() => button('重试查询'))
+    await openRecovery('重试查询')
     check(!button('AI 生成标题').querySelector('.animate-spin'), 'polling error keeps spinning')
     check(title().disabled, 'unknown task outcome must retain the field lock')
     const polls = state.polls
@@ -259,7 +274,7 @@ async function run() {
     check(state.polls === polls, 'failed status query kept polling')
     state.failPolls = false
     button('重试查询').click()
-    await wait(() => !button('重试查询'))
+    await wait(() => !button('标题生成需要处理'))
     check(latestRun('title').id === originalId, 'query retry created another task')
     await complete('title', 'completed', 'Recovered polling result')
   })

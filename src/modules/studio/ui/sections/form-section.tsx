@@ -36,6 +36,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { APP_URL } from '@/constants'
 import { videoUpdateSchema } from '@/db/schema'
 import { formatVideoStatus } from '@/lib/utils'
+import { GenerationAction } from '@/modules/studio/ui/components/generation-action'
 import { ThumbnailGenerateModal } from '@/modules/studio/ui/components/thumbnail-generate-modal'
 import { ThumbnailUploadModal } from '@/modules/studio/ui/components/thumbnail-upload-modal'
 import { useGenerationTask } from '@/modules/studio/ui/hooks/use-generation-task'
@@ -339,37 +340,19 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                     <FormLabel>
                       <div className="flex items-center gap-x-2">
                         标题
-                        <Button
-                          variant="ghost"
-                          type="button"
-                          size="icon"
-                          className="size-6 rounded-full"
-                          onClick={() => titleGeneration.start()}
-                          aria-label="AI 生成标题"
-                          title={
-                            form.formState.dirtyFields.title ? '请先保存该字段' : video.muxTrackId ? 'AI 生成标题' : '视频字幕尚未就绪'
+                        <GenerationAction
+                          label="标题"
+                          task={titleGeneration}
+                          disabled={update.isPending || !!form.formState.dirtyFields.title || !video.muxTrackId}
+                          disabledReason={
+                            form.formState.dirtyFields.title ? '请先保存该字段' : !video.muxTrackId ? '视频字幕尚未就绪' : '正在保存'
                           }
-                          disabled={titleGeneration.locked || update.isPending || !!form.formState.dirtyFields.title || !video.muxTrackId}
-                        >
-                          {titleGeneration.loading ? <Loader2Icon className="size-3 animate-spin" /> : <SparklesIcon className="size-3" />}
-                        </Button>
+                        />
                       </div>
                     </FormLabel>
                     <FormControl>
                       <Input {...field} disabled={titleGeneration.fieldLocked} placeholder="在此添加视频标题" />
                     </FormControl>
-                    {titleGeneration.message && (
-                      <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span>{titleGeneration.message}</span>
-                        {titleGeneration.retryLabel && (
-                          <GenerationRetryButton
-                            label={titleGeneration.retryLabel}
-                            disabled={titleGeneration.syncing}
-                            onRetry={() => void titleGeneration.resume()}
-                          />
-                        )}
-                      </div>
-                    )}
                     {titleGeneration.suggestion && !titleGeneration.locked && (
                       <details className="text-sm">
                         <summary>查看未采用的生成结果</summary>
@@ -394,33 +377,14 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                     <FormLabel>
                       <div className="flex items-center gap-x-2">
                         简介
-                        <Button
-                          variant="ghost"
-                          type="button"
-                          size="icon"
-                          className="size-6 rounded-full"
-                          onClick={() => descriptionGeneration.start()}
-                          aria-label="AI 生成简介"
-                          title={
-                            form.formState.dirtyFields.description
-                              ? '请先保存该字段'
-                              : video.muxTrackId
-                                ? 'AI 生成简介'
-                                : '视频字幕尚未就绪'
+                        <GenerationAction
+                          label="简介"
+                          task={descriptionGeneration}
+                          disabled={update.isPending || !!form.formState.dirtyFields.description || !video.muxTrackId}
+                          disabledReason={
+                            form.formState.dirtyFields.description ? '请先保存该字段' : !video.muxTrackId ? '视频字幕尚未就绪' : '正在保存'
                           }
-                          disabled={
-                            descriptionGeneration.locked ||
-                            update.isPending ||
-                            !!form.formState.dirtyFields.description ||
-                            !video.muxTrackId
-                          }
-                        >
-                          {descriptionGeneration.loading ? (
-                            <Loader2Icon className="size-3 animate-spin" />
-                          ) : (
-                            <SparklesIcon className="size-3" />
-                          )}
-                        </Button>
+                        />
                       </div>
                     </FormLabel>
                     <FormControl>
@@ -434,18 +398,6 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                       />
                     </FormControl>
                     <FormMessage />
-                    {descriptionGeneration.message && (
-                      <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span>{descriptionGeneration.message}</span>
-                        {descriptionGeneration.retryLabel && (
-                          <GenerationRetryButton
-                            label={descriptionGeneration.retryLabel}
-                            disabled={descriptionGeneration.syncing}
-                            onRetry={() => void descriptionGeneration.resume()}
-                          />
-                        )}
-                      </div>
-                    )}
                     {descriptionGeneration.suggestion && !descriptionGeneration.locked && (
                       <details className="text-sm">
                         <summary>查看未采用的生成结果</summary>
