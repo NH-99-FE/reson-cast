@@ -39,8 +39,47 @@ const result = await build({
     },
   ],
 })
+const interactionsClient = resolve('tests/browser/interactions-client.jsx')
+const interactions = await build({
+  entryPoints: ['tests/browser/interactions-ui.jsx'],
+  bundle: true,
+  write: false,
+  jsx: 'automatic',
+  format: 'iife',
+  define: { 'process.env.NODE_ENV': '"development"', 'process.env.NEXT_PUBLIC_APP_URL': '"http://localhost:4318"' },
+  plugins: [
+    {
+      name: 'interaction-boundaries',
+      setup(build) {
+        build.onResolve({ filter: /^@\/trpc\/client$/ }, () => ({ path: interactionsClient }))
+        build.onResolve({ filter: /^next\/(link|image)$/ }, args => ({ path: args.path, namespace: 'stub' }))
+        build.onLoad({ filter: /.*/, namespace: 'stub' }, args => ({
+          contents: stubs[args.path],
+          loader: 'jsx',
+          resolveDir: process.cwd(),
+        }))
+        build.onResolve({ filter: /^@clerk\/nextjs$/ }, () => ({ path: 'clerk', namespace: 'interaction-stub' }))
+        build.onLoad({ filter: /.*/, namespace: 'interaction-stub' }, () => ({
+          contents:
+            'export const useClerk = () => ({openSignIn() {}}); export const useAuth = () => ({ userId: "viewer", isLoaded: true });',
+          loader: 'js',
+        }))
+      },
+    },
+  ],
+})
 const bundle = result.outputFiles[0].contents
 createServer((request, response) => {
+  if (request.url === '/interactions.js') {
+    response.setHeader('content-type', 'text/javascript')
+    response.end(interactions.outputFiles[0].contents)
+    return
+  }
+  if (request.url === '/interactions') {
+    response.setHeader('content-type', 'text/html; charset=utf-8')
+    response.end('<!doctype html><html><body><div id="root"></div><script src="/interactions.js"></script></body></html>')
+    return
+  }
   if (request.url === '/app.js') {
     response.setHeader('content-type', 'text/javascript')
     response.end(bundle)

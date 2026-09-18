@@ -1,4 +1,5 @@
 import { useAuth, useClerk } from '@clerk/nextjs'
+import { useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns/formatDistanceToNow'
 import { ChevronDownIcon, ChevronUpIcon, MessageSquareIcon, MoreVerticalIcon, ThumbsDownIcon, ThumbsUpIcon, Trash2Icon } from 'lucide-react'
 import Link from 'next/link'
@@ -7,6 +8,8 @@ import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DEFAULT_LIMIT } from '@/constants'
+import { toggleReaction } from '@/lib/optimistic-reaction'
 import { cn } from '@/lib/utils'
 import { CommentsGetManyOutput } from '@/modules/comments/types'
 import { CommentForm } from '@/modules/comments/ui/components/comment-form'
@@ -22,6 +25,7 @@ interface CommentItemProps {
 export const CommentItem = ({ comment, variant = 'comment' }: CommentItemProps) => {
   const clerk = useClerk()
   const utils = trpc.useUtils()
+  const queryClient = useQueryClient()
   const { userId: userClerkId } = useAuth()
 
   const [isReplyOpen, setIsReplyOpen] = useState(false)
@@ -39,11 +43,62 @@ export const CommentItem = ({ comment, variant = 'comment' }: CommentItemProps) 
       }
     },
   })
+  const reactionInput = { videoId: comment.videoId, parentId: comment.parentId ?? undefined, limit: DEFAULT_LIMIT }
+  const optimisticReaction = async (action: 'like' | 'dislike') => {
+    await utils.comments.getMany.cancel(reactionInput)
+    const previous = utils.comments.getMany
+      .getInfiniteData(reactionInput)
+      ?.pages.flatMap(page => page.items)
+      .find(item => item.id === comment.id)
+    utils.comments.getMany.setInfiniteData(
+      reactionInput,
+      data =>
+        data && {
+          ...data,
+          pages: data.pages.map(page => ({
+            ...page,
+            items: page.items.map(item => (item.id === comment.id ? { ...item, ...toggleReaction(item, action) } : item)),
+          })),
+        }
+    )
+    return { previous }
+  }
+  const rollbackReaction = (context: Awaited<ReturnType<typeof optimisticReaction>> | undefined) => {
+    const previous = context?.previous
+    if (!previous) return
+    // Restore only this comment so other in-flight reactions are preserved.
+    utils.comments.getMany.setInfiniteData(
+      reactionInput,
+      data =>
+        data && {
+          ...data,
+          pages: data.pages.map(page => ({
+            ...page,
+            items: page.items.map(item =>
+              item.id === comment.id
+                ? {
+                    ...item,
+                    viewerReaction: previous.viewerReaction,
+                    likeCount: previous.likeCount,
+                    dislikeCount: previous.dislikeCount,
+                  }
+                : item
+            ),
+          })),
+        }
+    )
+  }
   const like = trpc.commentReactions.like.useMutation({
-    onSuccess: () => {
-      utils.comments.getMany.invalidate({ videoId: comment.videoId })
+    meta: { commentReactionVideoId: comment.videoId },
+    onMutate: () => optimisticReaction('like'),
+    onSettled: () => {
+      // The shared list must not refetch over another comment's optimistic state.
+      if (queryClient.isMutating({ predicate: mutation => mutation.options.meta?.commentReactionVideoId === comment.videoId }) === 1) {
+        return utils.comments.getMany.invalidate({ videoId: comment.videoId })
+      }
     },
-    onError: error => {
+    onError: (error, _input, context) => {
+      rollbackReaction(context)
       toast.error('出错了')
       if (error.data?.code === 'UNAUTHORIZED') {
         clerk.openSignIn()
@@ -51,10 +106,16 @@ export const CommentItem = ({ comment, variant = 'comment' }: CommentItemProps) 
     },
   })
   const dislike = trpc.commentReactions.dislike.useMutation({
-    onSuccess: () => {
-      utils.comments.getMany.invalidate({ videoId: comment.videoId })
+    meta: { commentReactionVideoId: comment.videoId },
+    onMutate: () => optimisticReaction('dislike'),
+    onSettled: () => {
+      // The shared list must not refetch over another comment's optimistic state.
+      if (queryClient.isMutating({ predicate: mutation => mutation.options.meta?.commentReactionVideoId === comment.videoId }) === 1) {
+        return utils.comments.getMany.invalidate({ videoId: comment.videoId })
+      }
     },
-    onError: error => {
+    onError: (error, _input, context) => {
+      rollbackReaction(context)
       toast.error('出错了')
       if (error.data?.code === 'UNAUTHORIZED') {
         clerk.openSignIn()
@@ -81,6 +142,8 @@ export const CommentItem = ({ comment, variant = 'comment' }: CommentItemProps) 
                 variant="ghost"
                 size="icon"
                 className="size-8 cursor-pointer"
+                aria-label="点赞评论"
+                aria-pressed={comment.viewerReaction === 'like'}
                 disabled={like.isPending || dislike.isPending}
                 onClick={() => {
                   like.mutate({ commentId: comment.id })
@@ -93,6 +156,8 @@ export const CommentItem = ({ comment, variant = 'comment' }: CommentItemProps) 
                 variant="ghost"
                 size="icon"
                 className="size-8 cursor-pointer"
+                aria-label="不喜欢评论"
+                aria-pressed={comment.viewerReaction === 'dislike'}
                 disabled={like.isPending || dislike.isPending}
                 onClick={() => {
                   dislike.mutate({ commentId: comment.id })
