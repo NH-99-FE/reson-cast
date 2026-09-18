@@ -1,5 +1,6 @@
 import { useAuth } from '@clerk/nextjs'
 import { Edit2Icon } from 'lucide-react'
+import Image from 'next/image'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -24,11 +25,11 @@ export const UserPageBanner = ({ user }: UserPageBannerProps) => {
       <BannerUploadModal userId={user.id} open={isBannerUploadModalOpen} onOpenChange={setIsBannerUploadModalOpen} />
       <div
         className={cn(
-          'h-[25vh] max-h-[200px] w-full rounded-xl',
+          'relative h-[25vh] max-h-[200px] w-full overflow-hidden rounded-xl',
           user.bannerUrl ? 'bg-cover bg-center' : 'bg-gradient-to-r from-gray-100 to-gray-200'
         )}
-        style={user.bannerUrl ? { backgroundImage: `url(${user.bannerUrl})` } : undefined}
       >
+        {user.bannerUrl ? <Image src={user.bannerUrl} alt="" fill sizes="100vw" className="object-cover" /> : null}
         {user.clerkId === userId && (
           <Button
             type="button"

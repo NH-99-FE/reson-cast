@@ -1,8 +1,10 @@
 'use client'
 import { useAuth } from '@clerk/nextjs'
 import MuxPlayer from '@mux/mux-player-react'
+import { getImageProps } from 'next/image'
 import { type ComponentRef, useCallback, useEffect, useState } from 'react'
 
+import { isPublicThumbnail } from '@/lib/video-image-source'
 import { THUMBNAIL_FALLBACK } from '@/modules/videos/constants'
 import { trpc } from '@/trpc/client'
 
@@ -20,6 +22,9 @@ export const VideoPlayerSkeleton = () => {
 }
 
 export const VideoPlayer = ({ videoId, thumbnailUrl, autoPlay, onPlay }: VideoPlayerProps) => {
+  const poster = isPublicThumbnail(thumbnailUrl)
+    ? getImageProps({ src: thumbnailUrl!, alt: '', width: 1280, height: 720 }).props.src
+    : thumbnailUrl || THUMBNAIL_FALLBACK
   const attachPlayer = useCallback((player: ComponentRef<typeof MuxPlayer> | null) => {
     if (!player) return
 
@@ -65,7 +70,7 @@ export const VideoPlayer = ({ videoId, thumbnailUrl, autoPlay, onPlay }: VideoPl
       tokens={playback.data?.tokens}
       playbackId={playback.data?.playbackId || ''}
       preferPlayback="mse"
-      poster={thumbnailUrl || THUMBNAIL_FALLBACK}
+      poster={poster}
       playerInitTime={0}
       autoPlay={autoPlay}
       thumbnailTime={0}

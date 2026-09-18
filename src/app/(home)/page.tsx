@@ -13,6 +13,7 @@ const Page = async ({ searchParams }: PageProps) => {
   void trpc.videos.getMany.prefetchInfinite({ categoryId, limit: DEFAULT_LIMIT })
   return (
     <HydrateClient>
+      <link rel="preconnect" href="https://image.mux.com" />
       <HomeView categoryId={categoryId} />
     </HydrateClient>
   )

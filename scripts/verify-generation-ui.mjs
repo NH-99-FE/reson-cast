@@ -104,6 +104,31 @@ const interactions = await build({
   ],
 })
 const bundle = result.outputFiles[0].contents
+const images = await build({
+  entryPoints: ['tests/browser/images-ui.jsx'],
+  bundle: true,
+  write: false,
+  jsx: 'automatic',
+  format: 'iife',
+  define: {
+    'process.env.NODE_ENV': '"development"',
+    'process.env': '{}',
+  },
+  // Use Next's actual component; avoid its CJS default-export wrapper in this standalone ESM bundle.
+  plugins: [
+    {
+      name: 'next-image-interop',
+      setup(build) {
+        build.onResolve({ filter: /^next\/image$/ }, () => ({ path: 'next-image', namespace: 'interop' }))
+        build.onLoad({ filter: /.*/, namespace: 'interop' }, () => ({
+          contents: "export { Image as default } from 'next/dist/client/image-component'",
+          loader: 'js',
+          resolveDir: process.cwd(),
+        }))
+      },
+    },
+  ],
+})
 const recoveryExample = await build({
   entryPoints: ['tests/browser/generation-action-ui.jsx'],
   bundle: true,
@@ -113,6 +138,16 @@ const recoveryExample = await build({
   define: { 'process.env.NODE_ENV': '"development"' },
 })
 createServer((request, response) => {
+  if (request.url === '/images.js') {
+    response.setHeader('content-type', 'text/javascript')
+    response.end(images.outputFiles[0].contents)
+    return
+  }
+  if (request.url === '/images') {
+    response.setHeader('content-type', 'text/html; charset=utf-8')
+    response.end('<!doctype html><html><body><div id="root"></div><script src="/images.js"></script></body></html>')
+    return
+  }
   if (request.url === '/realtime.js') {
     response.setHeader('content-type', 'text/javascript')
     response.end(realtime.outputFiles[0].contents)

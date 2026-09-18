@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import { videoThumbnailSource } from '@/lib/video-image-source'
 import { VideoGetManyOutput } from '@/modules/videos/types'
 import { VideoThumbnail, VideoThumbnailSkeleton } from '@/modules/videos/ui/components/video-thumbnail'
 
@@ -25,7 +26,7 @@ export const VideoGridCard = ({ data, onRemove, priority = false }: VideoGridCar
     <div className="group flex w-full flex-col gap-2">
       <Link prefetch href={`/videos/${data.id}`}>
         <VideoThumbnail
-          imageUrl={data.thumbnailUrl}
+          imageUrl={videoThumbnailSource(data)}
           previewUrl={data.previewUrl}
           title={data.title}
           duration={data.duration}

@@ -103,7 +103,15 @@ test('late/replayed uploads cannot reattach a cleaned file or overwrite a newer 
   await reset()
   const input = { videoId: video, userId: owner, expectedKey: 'old-file', newKey: 'new-file' }
   await execute(replaceThumbnailQuery(input))
+  assert.equal(
+    (await pg.query<{ thumbnail_url: string }>('SELECT thumbnail_url FROM videos')).rows[0].thumbnail_url,
+    `/api/videos/${video}/image/thumbnail?v=new-file`
+  )
   await execute(replaceThumbnailQuery({ ...input, expectedKey: 'new-file', newKey: null }))
+  assert.equal(
+    (await pg.query<{ thumbnail_url: string }>('SELECT thumbnail_url FROM videos')).rows[0].thumbnail_url,
+    `/api/videos/${video}/image/thumbnail?v=mux`
+  )
   await pg.exec('UPDATE video_file_cleanup SET cleaned_at=now()')
   assert.equal((await execute(replaceThumbnailQuery({ ...input, expectedKey: null })))[0].attached, false)
   assert.equal((await pg.query<{ thumbnail_key: string | null }>('SELECT thumbnail_key FROM videos')).rows[0].thumbnail_key, null)

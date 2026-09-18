@@ -15,7 +15,7 @@ export function replaceThumbnailQuery(input: {
     ), current_video AS MATERIALIZED (
       SELECT * FROM videos WHERE id = ${videoId}::uuid AND user_id = ${userId}::uuid FOR UPDATE
     ), saved AS (
-      UPDATE videos v SET thumbnail_key = ${newKey}, thumbnail_url = ${`/api/videos/${videoId}/image/thumbnail`}
+      UPDATE videos v SET thumbnail_key = ${newKey}, thumbnail_url = ${`/api/videos/${videoId}/image/thumbnail?v=${encodeURIComponent(newKey ?? 'mux')}`}
       FROM current_video c
       WHERE v.id = c.id AND c.deletion_requested_at IS NULL
         AND c.thumbnail_key IS NOT DISTINCT FROM ${expectedKey}::text

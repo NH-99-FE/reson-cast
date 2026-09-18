@@ -5,6 +5,7 @@ import { useMemo } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { videoThumbnailSource } from '@/lib/video-image-source'
 import { UserAvatar } from '@/modules/studio/ui/components/user-avatar'
 import { UserInfo } from '@/modules/users/ui/components/user-info'
 import { VideoGetManyOutput } from '@/modules/videos/types'
@@ -91,7 +92,7 @@ export const VideoRowCard = ({ data, size = 'default', onRemove }: VideoRowCardP
   return (
     <div className={videoRowCardVariants({ size })}>
       <Link prefetch href={`/videos/${data.id}`} className={thumbnailVariants({ size })}>
-        <VideoThumbnail imageUrl={data.thumbnailUrl} previewUrl={data.previewUrl} title={data.title} duration={data.duration} />
+        <VideoThumbnail imageUrl={videoThumbnailSource(data)} previewUrl={data.previewUrl} title={data.title} duration={data.duration} />
       </Link>
       {/*视频信息*/}
       <div className="min-w-0 flex-1">

@@ -260,7 +260,9 @@ export const playlistsRouter = createTRPCRouter({
           )`,
           user: users,
           thumbnailUrl: sql<string | null>`(
-            SELECT v.thumbnail_url
+            SELECT CASE WHEN v.thumbnail_key IS NOT NULL
+              THEN '/api/public/video-thumbnails/' || v.id::text || '/' || encode(convert_to(v.thumbnail_key, 'UTF8'), 'hex')
+              ELSE v.thumbnail_url END
             FROM ${playlistVideos} pv
             JOIN ${videos} v ON v.id = pv.video_id
             WHERE pv.playlist_id = ${playlists.id}

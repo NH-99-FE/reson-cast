@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { cardThumbnailSource, isPublicThumbnail } from '@/lib/video-image-source'
 import { THUMBNAIL_FALLBACK } from '@/modules/videos/constants'
 
 interface PlaylistThumbnailProps {
@@ -35,7 +36,14 @@ export const PlaylistThumbnail = ({ imageUrl, title, videoCount, className }: Pl
         <div className="absolute -top-1.5 left-1/2 aspect-video w-[98.5%] -translate-x-1/2 overflow-hidden rounded-xl bg-black/25" />
         {/*image*/}
         <div className="relative aspect-video w-full overflow-hidden rounded-xl">
-          <Image src={imageUrl || THUMBNAIL_FALLBACK} alt={title} className="h-full w-full object-cover" fill unoptimized />
+          <Image
+            src={cardThumbnailSource(imageUrl) || THUMBNAIL_FALLBACK}
+            alt={title}
+            className="h-full w-full object-cover"
+            fill
+            unoptimized={!isPublicThumbnail(imageUrl)}
+            sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+          />
         </div>
         <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/70 opacity-0 transition-opacity group-hover:opacity-100">
           <div className="flex items-center gap-x-2">

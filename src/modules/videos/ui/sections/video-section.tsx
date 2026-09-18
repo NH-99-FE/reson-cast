@@ -5,6 +5,7 @@ import { Suspense } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 
 import { cn } from '@/lib/utils'
+import { videoThumbnailSource } from '@/lib/video-image-source'
 import { trpc } from '@/trpc/client'
 
 import { VideoBanner } from '../components/video-banner'
@@ -53,7 +54,7 @@ const VideoSectionSuspense = ({ videoId }: VideoSectionProps) => {
   return (
     <>
       <div className={cn('relative aspect-video overflow-hidden rounded-xl bg-black', video.muxStatus !== 'ready' && 'rounded-b-none')}>
-        <VideoPlayer autoPlay onPlay={handlePlay} videoId={video.id} thumbnailUrl={video.thumbnailUrl} />
+        <VideoPlayer autoPlay onPlay={handlePlay} videoId={video.id} thumbnailUrl={videoThumbnailSource(video)} />
       </div>
       <VideoBanner status={video.muxStatus} />
       <VideoTopRow video={video} />
