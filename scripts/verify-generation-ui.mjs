@@ -21,11 +21,43 @@ const result = await build({
   write: false,
   jsx: 'automatic',
   format: 'iife',
-  define: { 'process.env.NODE_ENV': '"development"', 'process.env.NEXT_PUBLIC_APP_URL': '"http://localhost:4318"' },
+  define: {
+    'process.env.NODE_ENV': '"development"',
+    'process.env.NEXT_PUBLIC_APP_URL': '"http://localhost:4318"',
+  },
   plugins: [
     {
       name: 'test-boundaries',
       setup(build) {
+        build.onResolve({ filter: /^ably$/ }, () => ({ path: resolve('tests/browser/realtime-ably.jsx') }))
+        build.onResolve({ filter: /^@\/trpc\/client$/ }, () => ({ path: client }))
+        build.onResolve({ filter: /^(next\/|@clerk\/|@\/modules\/)/ }, args =>
+          args.path in stubs ? { path: args.path, namespace: 'stub' } : undefined
+        )
+        build.onLoad({ filter: /.*/, namespace: 'stub' }, args => ({
+          contents: stubs[args.path],
+          loader: 'jsx',
+          resolveDir: process.cwd(),
+        }))
+      },
+    },
+  ],
+})
+const realtime = await build({
+  entryPoints: ['tests/browser/realtime-ui.jsx'],
+  bundle: true,
+  write: false,
+  jsx: 'automatic',
+  format: 'iife',
+  define: {
+    'process.env.NODE_ENV': '"development"',
+    'process.env.NEXT_PUBLIC_APP_URL': '"http://localhost:4318"',
+  },
+  plugins: [
+    {
+      name: 'realtime-boundaries',
+      setup(build) {
+        build.onResolve({ filter: /^ably$/ }, () => ({ path: resolve('tests/browser/realtime-ably.jsx') }))
         build.onResolve({ filter: /^@\/trpc\/client$/ }, () => ({ path: client }))
         build.onResolve({ filter: /^(next\/|@clerk\/|@\/modules\/)/ }, args =>
           args.path in stubs ? { path: args.path, namespace: 'stub' } : undefined
@@ -46,7 +78,10 @@ const interactions = await build({
   write: false,
   jsx: 'automatic',
   format: 'iife',
-  define: { 'process.env.NODE_ENV': '"development"', 'process.env.NEXT_PUBLIC_APP_URL': '"http://localhost:4318"' },
+  define: {
+    'process.env.NODE_ENV': '"development"',
+    'process.env.NEXT_PUBLIC_APP_URL': '"http://localhost:4318"',
+  },
   plugins: [
     {
       name: 'interaction-boundaries',
@@ -78,6 +113,16 @@ const recoveryExample = await build({
   define: { 'process.env.NODE_ENV': '"development"' },
 })
 createServer((request, response) => {
+  if (request.url === '/realtime.js') {
+    response.setHeader('content-type', 'text/javascript')
+    response.end(realtime.outputFiles[0].contents)
+    return
+  }
+  if (request.url === '/realtime') {
+    response.setHeader('content-type', 'text/html; charset=utf-8')
+    response.end('<!doctype html><html><body><div id="root"></div><script src="/realtime.js"></script></body></html>')
+    return
+  }
   if (request.url === '/generation-action.js') {
     response.setHeader('content-type', 'text/javascript')
     response.end(recoveryExample.outputFiles[0].contents)

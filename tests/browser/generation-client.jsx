@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { TRPCClientError } from '@trpc/client'
 import { createTRPCReact } from '@trpc/react-query'
 import { observable } from '@trpc/server/observable'
 import { useEffect, useState } from 'react'
@@ -44,6 +45,8 @@ const handle = async ({ path, input }) => {
     return { id: videoId }
   }
   if (path === 'studio.getOne') {
+    if (state.deleted)
+      throw new TRPCClientError('Not found', { result: { error: { message: 'Not found', code: -32004, data: { code: 'NOT_FOUND' } } } })
     if (state.failDetails) throw new Error('simulated details failure')
     return { ...state.video }
   }

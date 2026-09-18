@@ -44,8 +44,6 @@ const VideosSectionSuspense = () => {
     },
     {
       getNextPageParam: lastPage => lastPage.nextCursor,
-      refetchInterval: query =>
-        query.state.data?.pages.some(page => page.items.some(video => video.deletionRequestedAt && !video.deletionError)) ? 5000 : false,
     }
   )
   return (

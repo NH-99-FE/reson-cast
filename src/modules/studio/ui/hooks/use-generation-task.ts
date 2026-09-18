@@ -35,11 +35,10 @@ export function useGenerationTask({
   const label = kind === 'title' ? '标题' : kind === 'description' ? '简介' : '封面'
   const input = { id: videoId, kind }
   const query = trpc.videos.getGenerationStatus.useQuery(input, {
-    enabled: !!accountId && phase.name !== 'paused' && phase.name !== 'sync-error' && phase.name !== 'submitting',
+    enabled: !!accountId && phase.name !== 'submitting',
     staleTime: 0,
     retry: false,
-    refetchIntervalInBackground: false,
-    refetchInterval: query => (query.state.status !== 'error' && active(query.state.data) ? 2500 : false),
+    refetchInterval: false,
   })
   const job = query.data
 
@@ -51,7 +50,8 @@ export function useGenerationTask({
   }, [])
 
   useEffect(() => {
-    if (!query.isSuccess || phase.name === 'submitting' || phase.name === 'sync-error' || phase.name === 'paused') return
+    if (!query.isSuccess || phase.name === 'submitting' || phase.name === 'sync-error') return
+    if (phase.name === 'paused' && active(job)) return
     if (active(job)) {
       observedActiveId.current = job!.id
       if (phase.name === 'restoring' || phase.name === 'idle') setPhase({ name: 'waiting', deadline: Date.now() + WAIT_MS })
@@ -169,7 +169,7 @@ export function useGenerationTask({
         : query.isError
           ? '进度查询暂时失败，可重试查询'
           : phase.name === 'paused'
-            ? '已暂停自动查询，后台仍可能处理中'
+            ? '等待较久，后台仍可能处理中，可刷新状态'
             : job?.status === 'queued' && job.error
               ? job.error
               : active(job) || phase.name === 'submitting'
@@ -181,7 +181,7 @@ export function useGenerationTask({
         : job?.status === 'queued'
           ? '重新提交'
           : phase.name === 'paused'
-            ? '继续查询'
+            ? '刷新状态'
             : query.isError
               ? '重试查询'
               : null,

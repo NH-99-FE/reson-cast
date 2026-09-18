@@ -3,6 +3,7 @@ import React from 'react'
 import { SidebarProvider } from '@/components/ui/sidebar'
 
 import { StudioNavbar } from '../components/studio-navbar'
+import { StudioRealtimeProvider } from '../components/studio-realtime-provider'
 import { StudioSidebar } from '../components/studio-sidebar'
 
 interface StudioLayoutProps {
@@ -15,7 +16,9 @@ export const StudioLayout = ({ children }: StudioLayoutProps) => {
         <StudioNavbar />
         <div className="flex min-h-screen pt-16">
           <StudioSidebar />
-          <main className="flex-1 overflow-y-auto">{children}</main>
+          <main className="flex-1 overflow-y-auto">
+            <StudioRealtimeProvider>{children}</StudioRealtimeProvider>
+          </main>
         </div>
       </div>
     </SidebarProvider>

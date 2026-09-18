@@ -1,9 +1,33 @@
 import { createRoot } from 'react-dom/client'
 import { toast } from 'sonner'
 
-import { FormSection } from '../../src/modules/studio/ui/sections/form-section'
-import { VideosSection } from '../../src/modules/studio/ui/sections/videos-section'
+import { StudioRealtimeProvider } from '../../src/modules/studio/ui/components/studio-realtime-provider'
+import { FormSection as StudioFormSection } from '../../src/modules/studio/ui/sections/form-section'
+import { VideosSection as StudioVideosSection } from '../../src/modules/studio/ui/sections/videos-section'
 import { delay, state, TestProvider, videoId } from './generation-client'
+import { connections } from './realtime-ably'
+
+window.fetch = async () =>
+  Response.json({ clientId: state.account, keyName: 'key', ttl: 600000, nonce: 'nonce', timestamp: Date.now(), mac: 'mac' })
+const FormSection = props => (
+  <StudioRealtimeProvider>
+    <StudioFormSection {...props} />
+  </StudioRealtimeProvider>
+)
+const VideosSection = () => (
+  <StudioRealtimeProvider>
+    <StudioVideosSection />
+  </StudioRealtimeProvider>
+)
+const send = (type, kind = null) =>
+  connections.at(-1).send({
+    id: crypto.randomUUID(),
+    videoId,
+    type,
+    kind,
+    version: 1,
+    jobId: kind ? latestRun(kind).id : null,
+  })
 
 const nativeTimeout = window.setTimeout
 let shortenDeadline = false
@@ -60,6 +84,7 @@ const latestRun = kind =>
 async function complete(kind, status = 'completed', value = `AI ${kind}`) {
   state.video[kind] = value
   latestRun(kind).status = status
+  send('generation.changed', kind)
   await wait(() => !(kind === 'title' ? title() : desc()).disabled)
 }
 const test = async (name, fn) => {
@@ -171,6 +196,7 @@ async function run() {
     state.video.title = 'Other page title'
     latestRun('title').status = 'conflict'
     latestRun('title').result = 'Generated suggestion'
+    send('generation.changed', 'title')
     await openRecovery('重试同步')
     check(title().disabled, 'sync failure must retain lock')
     check(!button('AI 生成标题').querySelector('.animate-spin'), 'failed synchronization keeps spinning')
@@ -201,19 +227,19 @@ async function run() {
     await complete('title', 'completed', 'Restored result')
     check(title().value === 'Restored result', 'restored result missing')
   })
-  await test('timeout keeps the lock and record; continue querying completes the same task', async () => {
+  await test('timeout keeps the lock and record; manual refresh completes the same task', async () => {
     shortenDeadline = true
     button('AI 生成标题').click()
-    await openRecovery('继续查询')
+    await openRecovery('刷新状态')
     check(title().disabled && latestRun('title').status === 'running', 'timeout unlocked or erased server task')
     check(!button('AI 生成标题').querySelector('.animate-spin'), 'paused query keeps spinning')
     const polls = state.polls
     await delay(2700)
-    check(state.polls === polls, 'timeout did not stop polling')
+    check(state.polls === polls, 'paused task must not poll')
     shortenDeadline = false
     latestRun('title').status = 'completed'
     state.video.title = 'Late result'
-    button('继续查询').click()
+    button('刷新状态').click()
     await wait(() => !title().disabled)
     check(title().value === 'Late result', 'resume did not sync')
   })
@@ -261,13 +287,14 @@ async function run() {
     check(latestRun('title').id === originalId, 'retry created a second task')
     await complete('title', 'completed', 'Retried result')
   })
-  await test('polling failure stops automatic queries and resumes the same task on retry', async () => {
+  await test('event-triggered query failure retains the lock and retries the same task', async () => {
     button('AI 生成标题').click()
     await wait(() => title().disabled && latestRun('title').status === 'running')
     const originalId = latestRun('title').id
     state.failPolls = true
+    send('generation.changed', 'title')
     await openRecovery('重试查询')
-    check(!button('AI 生成标题').querySelector('.animate-spin'), 'polling error keeps spinning')
+    check(!button('AI 生成标题').querySelector('.animate-spin'), 'query error keeps spinning')
     check(title().disabled, 'unknown task outcome must retain the field lock')
     const polls = state.polls
     await delay(2700)
@@ -276,7 +303,7 @@ async function run() {
     button('重试查询').click()
     await wait(() => !button('标题生成需要处理'))
     check(latestRun('title').id === originalId, 'query retry created another task')
-    await complete('title', 'completed', 'Recovered polling result')
+    await complete('title', 'completed', 'Recovered query result')
   })
   await test('old cover cleanup failure has an explicit recovery action', async () => {
     state.pendingCleanup = 1
@@ -294,7 +321,7 @@ async function run() {
       await wait(() => document.querySelector('img[alt="thumbnail"]') !== previous)
     }
   })
-  await test('failed deletions stop list polling; retry resumes it until the item disappears', async () => {
+  await test('deletion retry stays event-driven until the item disappears', async () => {
     state.video.deletionRequestedAt = new Date()
     state.video.deletionError = 'failed'
     root.render(
@@ -309,8 +336,10 @@ async function run() {
     button('重试删除').click()
     await wait(() => document.body.textContent.includes('正在删除'))
     const resumed = state.listPolls
-    await wait(() => state.listPolls > resumed)
+    await delay(5300)
+    check(state.listPolls === resumed, 'pending deletion must not poll')
     state.deleted = true
+    send('deletion.changed')
     await wait(() => !document.body.textContent.includes('正在删除'))
   })
   document.body.dataset.result = 'passed'

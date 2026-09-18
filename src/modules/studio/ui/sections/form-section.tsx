@@ -153,13 +153,20 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
   const [thumbnailGenerateModalOpen, setThumbnailGenerateModalOpen] = useState(false)
   const [thumbnailModalOpen, setThumbnailModalOpen] = useState<boolean>(false)
 
-  const [video] = trpc.studio.getOne.useSuspenseQuery({ id: videoId })
+  const [video, videoQuery] = trpc.studio.getOne.useSuspenseQuery({ id: videoId })
   const [categories] = trpc.categories.getMany.useSuspenseQuery()
 
   const form = useForm<z.infer<typeof videoUpdateSchema>>({
     resolver: zodResolver(videoUpdateSchema),
     defaultValues: video,
   })
+  const unavailable = videoQuery.error?.data?.code === 'NOT_FOUND'
+  useEffect(() => {
+    if (unavailable) return
+    for (const key of editableVideoFields) {
+      if (!form.getFieldState(key).isDirty) form.resetField(key, { defaultValue: video[key] })
+    }
+  }, [video, form, unavailable])
   const mounted = useRef(false)
   useEffect(() => {
     mounted.current = true
@@ -238,8 +245,11 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
     onError: () => toast.error('恢复失败'),
   })
 
-  const titleGeneration = useTextGeneration({ accountId, videoId, kind: 'title', form, onSaved: refreshRelated })
-  const descriptionGeneration = useTextGeneration({ accountId, videoId, kind: 'description', form, onSaved: refreshRelated })
+  const refreshGenerated = () => {
+    void utils.studio.getMany.invalidate()
+  }
+  const titleGeneration = useTextGeneration({ accountId, videoId, kind: 'title', form, onSaved: refreshGenerated })
+  const descriptionGeneration = useTextGeneration({ accountId, videoId, kind: 'description', form, onSaved: refreshGenerated })
   const thumbnailGeneration = useGenerationTask({
     accountId,
     videoId,
@@ -247,7 +257,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
     onSettled: async () => {
       const fresh = await utils.client.studio.getOne.query({ id: videoId })
       utils.studio.getOne.setData({ id: videoId }, fresh)
-      refreshRelated()
+      refreshGenerated()
     },
   })
   const cleanup = trpc.videos.getPendingFileCleanup.useQuery({ id: videoId })
@@ -263,7 +273,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
   const patch = dirtyVideoPatch(form.getValues(), form.formState.dirtyFields, locked)
   const onSubmit = (data: z.infer<typeof videoUpdateSchema>) => {
     const changes = dirtyVideoPatch(data, form.formState.dirtyFields, locked)
-    if (!update.isPending && Object.keys(changes).length) update.mutate({ id: videoId, ...changes })
+    if (!unavailable && !update.isPending && Object.keys(changes).length) update.mutate({ id: videoId, ...changes })
   }
 
   const fullUrl = `${APP_URL}/videos/${videoId}`
@@ -285,6 +295,11 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
         onOpenChange={setThumbnailGenerateModalOpen}
       />
       <ThumbnailUploadModal open={thumbnailModalOpen} onOpenChange={setThumbnailModalOpen} videoId={videoId} />
+      {unavailable && (
+        <p role="alert" className="mb-4 rounded border p-4">
+          视频已删除或无法访问，无法继续保存。尚未保存的文本仍保留，可复制后离开。
+        </p>
+      )}
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <div className="mb-6 flex items-center justify-between">
@@ -293,7 +308,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
               <p className="text-xs text-muted-foreground">管理你的视频</p>
             </div>
             <div className="flex items-center gap-x-2">
-              <Button type="submit" variant="outline" disabled={update.isPending || !Object.keys(patch).length}>
+              <Button type="submit" variant="outline" disabled={unavailable || update.isPending || !Object.keys(patch).length}>
                 {update.isPending ? <Loader2Icon className="w-8 animate-spin" /> : <SaveIcon />}
                 保存
               </Button>
