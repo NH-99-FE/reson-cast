@@ -1,19 +1,25 @@
-import { FlatCompat } from '@eslint/eslintrc'
+import nextVitals from 'eslint-config-next/core-web-vitals'
+import nextTypescript from 'eslint-config-next/typescript'
 import eslintConfigPrettier from 'eslint-config-prettier/flat'
 import eslintPluginSimpleImportSort from 'eslint-plugin-simple-import-sort'
-import { dirname } from 'path'
-import { fileURLToPath } from 'url'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-})
 
 const eslintConfig = [
   { ignores: ['**/node_modules/**', '**/.next/**', 'dist/**'] },
-  ...compat.extends('next/core-web-vitals', 'next/typescript'),
+  ...nextVitals,
+  ...nextTypescript,
+  {
+    // Migration exception: these existing effects synchronize external widgets,
+    // media/query state, or the generation lifecycle. Keep the remaining Hooks
+    // checks enabled; remove entries when each synchronization flow is migrated.
+    files: [
+      'src/components/filter-carousel.tsx',
+      'src/components/ui/carousel.tsx',
+      'src/hooks/use-mobile.ts',
+      'src/modules/studio/ui/hooks/use-generation-task.ts',
+      'src/modules/videos/ui/components/video-player.tsx',
+    ],
+    rules: { 'react-hooks/set-state-in-effect': 'off' },
+  },
   {
     plugins: { 'simple-import-sort': eslintPluginSimpleImportSort },
     rules: {

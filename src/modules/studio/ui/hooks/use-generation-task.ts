@@ -29,7 +29,9 @@ export function useGenerationTask({
   const settledId = useRef<string | null>(null)
   const observedActiveId = useRef<string | null>(null)
   const callback = useRef(onSettled)
-  callback.current = onSettled
+  useEffect(() => {
+    callback.current = onSettled
+  }, [onSettled])
   const label = kind === 'title' ? '标题' : kind === 'description' ? '简介' : '封面'
   const input = { id: videoId, kind }
   const query = trpc.videos.getGenerationStatus.useQuery(input, {

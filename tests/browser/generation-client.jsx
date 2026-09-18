@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createTRPCReact } from '@trpc/react-query'
 import { observable } from '@trpc/server/observable'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export const trpc = createTRPCReact()
 export const videoId = '8c1f3a65-ef3b-44dc-991c-e59922c6fa73'
@@ -120,7 +120,12 @@ export function TestProvider({ children }) {
       ],
     })
   )
-  state.refresh = () => queryClient.invalidateQueries()
+  useEffect(() => {
+    state.refresh = () => queryClient.invalidateQueries()
+    return () => {
+      state.refresh = null
+    }
+  }, [queryClient])
   return (
     <trpc.Provider client={client} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
