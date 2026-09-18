@@ -7,8 +7,14 @@ import { imageOptimizer } from 'next/dist/server/image-optimizer'
 import { imageConfigDefault } from 'next/dist/shared/lib/image-config'
 
 import nextConfig from '../next.config'
-import { publicThumbnailResponse, videoImageResponse } from '../src/lib/video-image-response'
-import { cardThumbnailSource, publicThumbnailPath, thumbnailVersion, videoThumbnailSource } from '../src/lib/video-image-source'
+import { publicMuxThumbnailResponse, publicThumbnailResponse, videoImageResponse } from '../src/lib/video-image-response'
+import {
+  cardThumbnailSource,
+  publicMuxThumbnailPath,
+  publicThumbnailPath,
+  thumbnailVersion,
+  videoThumbnailSource,
+} from '../src/lib/video-image-source'
 
 const videoId = '00000000-0000-4000-8000-000000000002'
 
@@ -79,6 +85,95 @@ test('only public custom covers select the canonical optimizer source', () => {
   assert.equal(nextConfig.images?.minimumCacheTTL, 60)
   assert.ok(nextConfig.images?.remotePatterns?.every(pattern => pattern.search === ''))
   assert.ok(nextConfig.images?.localPatterns?.every(pattern => pattern.search === '' && !pattern.pathname?.startsWith('/api/videos/')))
+})
+
+test('public Mux covers have stable version URLs for cards and posters; private/deleted covers retain authentication', () => {
+  const video = { id: videoId, visibility: 'public', thumbnailKey: null, muxPlaybackId: 'mux', thumbnailUrl: '/authenticated' }
+  const poster = publicMuxThumbnailPath(videoId, 'mux')
+  assert.equal(videoThumbnailSource(video), poster)
+  assert.equal(cardThumbnailSource(poster), publicMuxThumbnailPath(videoId, 'mux', 640))
+  assert.equal(cardThumbnailSource(publicMuxThumbnailPath(videoId, 'mux', 640)), publicMuxThumbnailPath(videoId, 'mux', 640))
+  assert.equal(videoThumbnailSource({ ...video, visibility: 'private' }), video.thumbnailUrl)
+  assert.equal(videoThumbnailSource({ ...video, deletionRequestedAt: new Date() }), video.thumbnailUrl)
+  assert.equal(videoThumbnailSource({ ...video, muxPlaybackId: null }), video.thumbnailUrl)
+  assert.notEqual(videoThumbnailSource({ ...video, muxPlaybackId: 'replacement' }), poster)
+  assert.equal(videoThumbnailSource({ ...video, thumbnailKey: 'custom' }), publicThumbnailPath(videoId, 'custom'))
+})
+
+test('public Mux covers stream bounded images with one-hour caching, without redirecting or exposing signed URLs', async () => {
+  const signed: unknown[] = []
+  const fetched: unknown[] = []
+  for (const width of ['640', '1280']) {
+    const response = await publicMuxThumbnailResponse(
+      { videoId, version: thumbnailVersion('mux'), width },
+      {
+        publicVideo: async () => ({ thumbnailKey: null, muxPlaybackId: 'mux' }),
+        signMux: async (id, kind, width) => {
+          signed.push({ id, kind, width })
+          return 'https://image.mux.com/mux/thumbnail.webp?token=secret'
+        },
+        fetchImage: (async (url, init) => {
+          fetched.push({ url, cache: init?.cache })
+          return new Response('image bytes', { headers: { 'Content-Type': 'image/webp' } })
+        }) as typeof fetch,
+      }
+    )
+    assert.equal(response.status, 200)
+    assert.equal(response.headers.get('cache-control'), 'public, max-age=3600, s-maxage=3600, must-revalidate')
+    assert.equal(response.headers.get('content-type'), 'image/webp')
+    assert.equal(response.headers.get('location'), null)
+    assert.equal(response.headers.get('vary'), null)
+    assert.equal(await response.text(), 'image bytes')
+  }
+  assert.deepEqual(signed, [
+    { id: 'mux', kind: 'thumbnail', width: 640 },
+    { id: 'mux', kind: 'thumbnail', width: 1280 },
+  ])
+  assert.deepEqual(fetched, Array(2).fill({ url: 'https://image.mux.com/mux/thumbnail.webp?token=secret', cache: 'no-store' }))
+})
+
+test('public Mux source rejects unavailable videos, stale playback IDs, custom covers, invalid inputs, and failed upstream images', async () => {
+  let video: { thumbnailKey: string | null; muxPlaybackId: string | null } | undefined
+  let signed = 0
+  let contentType: string | undefined = 'image/webp'
+  let status = 200
+  const access = {
+    publicVideo: async () => video,
+    signMux: async () => {
+      signed++
+      return 'https://image.mux.com/mux/thumbnail.webp?token=secret'
+    },
+    fetchImage: (async () =>
+      new Response('bytes', { status, headers: contentType ? { 'Content-Type': contentType } : {} })) as typeof fetch,
+  }
+  const params = { videoId, version: thumbnailVersion('mux'), width: '640' }
+  for (const unavailable of [
+    undefined, // The public query excludes private and deleted videos, including owner requests.
+    { thumbnailKey: null, muxPlaybackId: null },
+    { thumbnailKey: null, muxPlaybackId: 'replacement' },
+    { thumbnailKey: 'custom', muxPlaybackId: 'mux' },
+  ]) {
+    video = unavailable
+    const response = await publicMuxThumbnailResponse(params, access)
+    assert.equal(response.status, 404)
+    assert.equal(response.headers.get('cache-control'), 'private, no-store')
+  }
+  video = { thumbnailKey: null, muxPlaybackId: 'mux' }
+  for (const invalid of [{ width: '99999' }, { videoId: 'invalid' }, { version: 'not-hex' }]) {
+    assert.equal((await publicMuxThumbnailResponse({ ...params, ...invalid }, access)).status, 404)
+  }
+  assert.equal(signed, 0)
+  for (const upstream of [
+    { status: 403, contentType: 'image/webp' },
+    { status: 200, contentType: 'text/html' },
+    { status: 200, contentType: undefined },
+  ]) {
+    ;({ status, contentType } = upstream)
+    const response = await publicMuxThumbnailResponse(params, access)
+    assert.equal(response.status, 502)
+    assert.equal(response.headers.get('cache-control'), 'private, no-store')
+    assert.equal(response.headers.get('location'), null)
+  }
 })
 
 test('public source rejects private/deleted videos and old versions before fetching; never redirects a bearer URL', async () => {

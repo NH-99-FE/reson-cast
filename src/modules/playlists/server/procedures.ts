@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { db } from '@/db'
 import { playlists, playlistVideos, users, videoReactions, videos, videoViews } from '@/db/schema'
+import { type VideoThumbnailInput, videoThumbnailSource } from '@/lib/video-image-source'
 import { publicVideoCondition, requireVideo } from '@/modules/videos/server/services/access'
 import { createTRPCRouter, protectedProcedure } from '@/trpc/init'
 
@@ -259,15 +260,19 @@ export const playlistsRouter = createTRPCRouter({
               AND v.visibility = 'public' AND v.deletion_requested_at IS NULL
           )`,
           user: users,
-          thumbnailUrl: sql<string | null>`(
-            SELECT CASE WHEN v.thumbnail_key IS NOT NULL
-              THEN '/api/public/video-thumbnails/' || v.id::text || '/' || encode(convert_to(v.thumbnail_key, 'UTF8'), 'hex')
-              ELSE v.thumbnail_url END
+          thumbnailVideo: sql<VideoThumbnailInput | null>`(
+            SELECT json_build_object(
+              'id', v.id,
+              'visibility', v.visibility,
+              'thumbnailKey', v.thumbnail_key,
+              'thumbnailUrl', v.thumbnail_url,
+              'muxPlaybackId', v.mux_playback_id
+            )
             FROM ${playlistVideos} pv
             JOIN ${videos} v ON v.id = pv.video_id
             WHERE pv.playlist_id = ${playlists.id}
               AND v.visibility = 'public' AND v.deletion_requested_at IS NULL
-            ORDER BY pv.updated_at DESC 
+            ORDER BY pv.updated_at DESC
             LIMIT 1
           )`,
         })
@@ -299,7 +304,10 @@ export const playlistsRouter = createTRPCRouter({
         : null
 
       return {
-        items,
+        items: items.map(({ thumbnailVideo, ...playlist }) => ({
+          ...playlist,
+          thumbnailUrl: thumbnailVideo ? videoThumbnailSource(thumbnailVideo) : null,
+        })),
         nextCursor,
       }
     }),

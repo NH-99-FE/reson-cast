@@ -26,15 +26,20 @@ export const VideoThumbnailSkeleton = () => {
 
 export const VideoThumbnail = ({ title, imageUrl, previewUrl, duration, priority = false }: VideoThumbnailProps) => {
   const [previewActive, setPreviewActive] = useState(false)
+  const [requestedPreviewUrl, setRequestedPreviewUrl] = useState<string | null>(null)
+  const activatePreview = () => {
+    setRequestedPreviewUrl(previewUrl || null)
+    setPreviewActive(true)
+  }
   return (
     <div
       className="group relative"
       onPointerEnter={event => {
-        if (event.pointerType !== 'touch') setPreviewActive(true)
+        if (event.pointerType !== 'touch') activatePreview()
       }}
       onPointerLeave={() => setPreviewActive(false)}
       onPointerDown={event => {
-        if (event.pointerType === 'touch') setPreviewActive(true)
+        if (event.pointerType === 'touch') activatePreview()
       }}
       onPointerUp={event => {
         if (event.pointerType === 'touch') setPreviewActive(false)
@@ -57,7 +62,16 @@ export const VideoThumbnail = ({ title, imageUrl, previewUrl, duration, priority
             if (e.currentTarget.getAttribute('src') !== THUMBNAIL_FALLBACK) e.currentTarget.src = THUMBNAIL_FALLBACK
           }}
         />
-        {previewActive && previewUrl ? <VideoPreview key={previewUrl} src={previewUrl} /> : null}
+        {/* Mount on interaction and keep hidden between interactions. Unmount on failure or a URL mismatch;
+            the next interaction requests the current URL. */}
+        {previewUrl && requestedPreviewUrl === previewUrl ? (
+          <VideoPreview
+            key={previewUrl}
+            src={previewUrl}
+            active={previewActive}
+            onError={() => setRequestedPreviewUrl(current => (current === previewUrl ? null : current))}
+          />
+        ) : null}
       </div>
       <div className="absolute right-2 bottom-2 rounded bg-black/70 px-1 py-0.5 text-xs font-medium text-white">
         {formatDuration(duration)}
@@ -66,7 +80,7 @@ export const VideoThumbnail = ({ title, imageUrl, previewUrl, duration, priority
   )
 }
 
-function VideoPreview({ src }: { src: string }) {
+function VideoPreview({ src, active, onError }: { src: string; active: boolean; onError: () => void }) {
   const [ready, setReady] = useState(false)
   return (
     <Image
@@ -77,8 +91,8 @@ function VideoPreview({ src }: { src: string }) {
       unoptimized
       loading="eager"
       onLoad={() => setReady(true)}
-      onError={() => setReady(false)}
-      className={`pointer-events-none h-full w-full object-cover ${ready ? 'opacity-100' : 'opacity-0'}`}
+      onError={onError}
+      className={`pointer-events-none h-full w-full object-cover ${active && ready ? 'opacity-100' : 'hidden opacity-0'}`}
     />
   )
 }

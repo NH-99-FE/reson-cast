@@ -7,12 +7,19 @@ export function publicThumbnailPath(videoId: string, key: string) {
   return `/api/public/video-thumbnails/${videoId}/${thumbnailVersion(key)}`
 }
 
+export function publicMuxThumbnailPath(videoId: string, playbackId: string, width: 640 | 1280 = 1280) {
+  return `/api/public/video-mux-thumbnails/${videoId}/${thumbnailVersion(playbackId)}/${width}`
+}
+
 export function isPublicThumbnail(src?: string | null) {
   return !!src && /^\/api\/public\/video-thumbnails\/[0-9a-f-]{36}\/[0-9a-f]+$/.test(src)
 }
 
-/** Only the authenticated Mux fallback accepts a display width; preserve version parameters. */
+/** Mux serves cards at 640px; preserve versions and leave optimizer sources unchanged. */
 export function cardThumbnailSource(src?: string | null) {
+  if (src && /^\/api\/public\/video-mux-thumbnails\/[0-9a-f-]{36}\/[0-9a-f]+\/(?:640|1280)$/.test(src)) {
+    return src.replace(/\/(?:640|1280)$/, '/640')
+  }
   if (!src || !/^\/api\/videos\/[0-9a-f-]{36}\/image\/thumbnail(?:\?|$)/.test(src)) return src
   const [path, query] = src.split('?')
   const params = new URLSearchParams(query)
@@ -20,15 +27,19 @@ export function cardThumbnailSource(src?: string | null) {
   return `${path}?${params}`
 }
 
-export function videoThumbnailSource(video: {
+export interface VideoThumbnailInput {
   id: string
   visibility: string
   thumbnailKey: string | null
   thumbnailUrl: string | null
+  muxPlaybackId?: string | null
   deletionRequestedAt?: Date | string | null
-}) {
-  if (video.visibility === 'public' && video.thumbnailKey && !video.deletionRequestedAt) {
-    return publicThumbnailPath(video.id, video.thumbnailKey)
+}
+
+export function videoThumbnailSource(video: VideoThumbnailInput) {
+  if (video.visibility === 'public' && !video.deletionRequestedAt) {
+    if (video.thumbnailKey) return publicThumbnailPath(video.id, video.thumbnailKey)
+    if (video.muxPlaybackId) return publicMuxThumbnailPath(video.id, video.muxPlaybackId)
   }
   return video.thumbnailUrl
 }

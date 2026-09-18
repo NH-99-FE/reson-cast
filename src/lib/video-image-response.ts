@@ -71,3 +71,45 @@ export async function publicThumbnailResponse(
   // The source itself is never cached; only the optimizer's derived images are cached.
   return new Response(result.body, { headers: { ...noStore, 'Content-Type': contentType, 'Content-Disposition': 'attachment' } })
 }
+
+/** Stable public URL: fetch signed Mux bytes on a cache miss without exposing the token. */
+export async function publicMuxThumbnailResponse(
+  params: { videoId: string; version: string; width: string },
+  access: {
+    publicVideo: (id: string) => Promise<{ thumbnailKey: string | null; muxPlaybackId: string | null } | undefined>
+    signMux: ImageAccess['signMux']
+    fetchImage?: typeof fetch
+  }
+) {
+  const input = z
+    .object({
+      videoId: z.uuid(),
+      version: z
+        .string()
+        .regex(/^[0-9a-f]+$/)
+        .max(512),
+      width: z.enum(['640', '1280']),
+    })
+    .safeParse(params)
+  if (!input.success) return new Response(null, { status: 404, headers: noStore })
+  const video = await access.publicVideo(input.data.videoId)
+  if (video?.thumbnailKey || !video?.muxPlaybackId || thumbnailVersion(video.muxPlaybackId) !== input.data.version) {
+    return new Response(null, { status: 404, headers: noStore })
+  }
+  const url = await access.signMux(video.muxPlaybackId, 'thumbnail', input.data.width === '640' ? 640 : 1280)
+  const result = await (access.fetchImage ?? fetch)(url, { cache: 'no-store', signal: AbortSignal.timeout(15_000) })
+  const contentType = result.headers.get('content-type')?.split(';')[0].trim().toLowerCase()
+  if (!result.ok || !contentType || !/^image\/[a-z0-9.+-]+$/.test(contentType)) {
+    await result.body?.cancel()
+    return new Response(null, { status: 502, headers: noStore })
+  }
+  return new Response(result.body, {
+    headers: {
+      'Cache-Control': 'public, max-age=3600, s-maxage=3600, must-revalidate',
+      'Content-Type': contentType,
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox",
+      'Content-Disposition': 'attachment',
+    },
+  })
+}
