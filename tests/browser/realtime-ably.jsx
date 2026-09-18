@@ -5,6 +5,7 @@ export class Realtime {
     this.listeners = []
     this.closed = false
     this.channel = {
+      state: 'initialized',
       listeners: {},
       off: () => {
         this.channel.listeners = {}
@@ -17,7 +18,10 @@ export class Realtime {
       },
       subscribe: async callback => {
         this.receive = callback
-        queueMicrotask(() => this.channel.listeners.attached?.())
+        queueMicrotask(() => {
+          this.channel.state = 'attached'
+          this.channel.listeners.attached?.()
+        })
       },
     }
     this.channels = {

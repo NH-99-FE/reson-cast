@@ -3,11 +3,15 @@
 import { useAuth } from '@clerk/nextjs'
 import { useQueryClient } from '@tanstack/react-query'
 import { Realtime, type TokenDetails } from 'ably'
-import { useCallback, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 
-import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { refreshStudioQueries } from '@/lib/realtime/cache'
 import { studioChannel, type StudioEvent, studioEventSchema } from '@/lib/realtime/events'
+
+type ConnectionStatus = 'connecting' | 'connected' | 'unavailable'
+const RealtimeStatusContext = createContext<{ status: ConnectionStatus; reconnect: () => void } | null>(null)
+const DISCONNECT_NOTICE_MS = 10_000
 
 async function getToken(signal?: AbortSignal): Promise<TokenDetails> {
   const response = await fetch('/api/realtime/auth', { method: 'POST', cache: 'no-store', signal })
@@ -18,7 +22,7 @@ async function getToken(signal?: AbortSignal): Promise<TokenDetails> {
 export function StudioRealtimeProvider({ children }: { children: React.ReactNode }) {
   const { userId } = useAuth()
   const client = useQueryClient()
-  const [status, setStatus] = useState('connecting')
+  const [status, setStatus] = useState<ConnectionStatus>('connecting')
   const [retry, setRetry] = useState(0)
   const refresh = useCallback(() => {
     // Active queries only: no background traffic for unmounted studio pages.
@@ -30,6 +34,19 @@ export function StudioRealtimeProvider({ children }: { children: React.ReactNode
     let connection: Realtime | undefined
     let channel: ReturnType<Realtime['channels']['get']> | undefined
     let timer: ReturnType<typeof setTimeout> | undefined
+    let disconnectTimer: ReturnType<typeof setTimeout> | undefined
+    const updateStatus = (connected: boolean) => {
+      if (connected) {
+        clearTimeout(disconnectTimer)
+        disconnectTimer = undefined
+        setStatus('connected')
+      } else {
+        setStatus(previous => (previous === 'unavailable' ? previous : 'connecting'))
+        // Keep the same deadline through successive reconnect attempts.
+        disconnectTimer ??= setTimeout(() => setStatus('unavailable'), DISCONNECT_NOTICE_MS)
+      }
+    }
+    updateStatus(false)
     const seen = new Set<string>()
     const pending: StudioEvent[] = []
     let disposed = false
@@ -57,12 +74,12 @@ export function StudioRealtimeProvider({ children }: { children: React.ReactNode
         channel = connection.channels.get(studioChannel(initial.clientId!))
         connection.connection.on(change => {
           if (disposed) return
-          setStatus(change.current)
+          updateStatus(change.current === 'connected' && channel?.state === 'attached')
           if (change.current === 'connected') refresh()
         })
         channel.on('attached', () => {
           if (!disposed) {
-            setStatus('connected')
+            updateStatus(true)
             refresh()
           }
         })
@@ -70,10 +87,10 @@ export function StudioRealtimeProvider({ children }: { children: React.ReactNode
           if (!disposed && !change.resumed) refresh()
         })
         channel.on('failed', () => {
-          if (!disposed) setStatus('failed')
+          if (!disposed) updateStatus(false)
         })
         channel.on('suspended', () => {
-          if (!disposed) setStatus('suspended')
+          if (!disposed) updateStatus(false)
         })
         void channel
           .subscribe(message => {
@@ -91,16 +108,17 @@ export function StudioRealtimeProvider({ children }: { children: React.ReactNode
             }, 150)
           })
           .catch(() => {
-            if (!disposed) setStatus('failed')
+            if (!disposed) updateStatus(false)
           })
       })
       .catch(() => {
-        if (!disposed) setStatus('failed')
+        if (!disposed) updateStatus(false)
       })
     return () => {
       disposed = true
       controller.abort()
       if (timer) clearTimeout(timer)
+      clearTimeout(disconnectTimer)
       document.removeEventListener('visibilitychange', visible)
       channel?.unsubscribe()
       channel?.off()
@@ -109,31 +127,35 @@ export function StudioRealtimeProvider({ children }: { children: React.ReactNode
       seen.clear()
     }
   }, [userId, client, refresh, retry])
+  const reconnect = () => {
+    refresh()
+    setStatus('connecting')
+    setRetry(value => value + 1)
+  }
+  return <RealtimeStatusContext.Provider value={{ status, reconnect }}>{children}</RealtimeStatusContext.Provider>
+}
+
+export function StudioRealtimeIndicator() {
+  const realtime = useContext(RealtimeStatusContext)
+  // Reserve space so the title does not shift while reconnecting.
+  if (!realtime || realtime.status === 'connecting') return <span aria-hidden="true" className="inline-block size-6 shrink-0" />
+  const connected = realtime.status === 'connected'
+  const label = connected ? '内容变更会自动更新' : '自动更新已暂停，点击重新连接'
   return (
-    <>
-      <div role="status" className="flex items-center justify-between gap-3 border-b px-4 py-2 text-sm text-muted-foreground">
-        <span>
-          {status === 'connected'
-            ? '实时同步已连接'
-            : status === 'connecting'
-              ? '正在连接实时同步…'
-              : '实时同步暂未连接，后台任务会继续处理'}
-        </span>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => {
-            refresh()
-            if (status !== 'connected') {
-              setStatus('connecting')
-              setRetry(value => value + 1)
-            }
-          }}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label={label}
+          onClick={connected ? undefined : realtime.reconnect}
+          className="inline-flex size-6 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          刷新状态
-        </Button>
-      </div>
-      {children}
-    </>
+          <span aria-hidden="true" className={`size-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }

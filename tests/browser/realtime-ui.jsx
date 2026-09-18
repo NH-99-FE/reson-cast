@@ -1,6 +1,6 @@
 import { createRoot } from 'react-dom/client'
 
-import { StudioRealtimeProvider } from '../../src/modules/studio/ui/components/studio-realtime-provider'
+import { StudioRealtimeIndicator, StudioRealtimeProvider } from '../../src/modules/studio/ui/components/studio-realtime-provider'
 import { FormSection } from '../../src/modules/studio/ui/sections/form-section'
 import { VideosSection } from '../../src/modules/studio/ui/sections/videos-section'
 import { state, TestProvider, videoId } from './generation-client'
@@ -12,7 +12,13 @@ let serial = 0
 const show = (list = false) =>
   root.render(
     <TestProvider key={`${state.account}:${serial++}`}>
-      <StudioRealtimeProvider>{list ? <VideosSection /> : <FormSection videoId={videoId} />}</StudioRealtimeProvider>
+      <StudioRealtimeProvider>
+        <header>
+          工作空间
+          <StudioRealtimeIndicator />
+        </header>
+        {list ? <VideosSection /> : <FormSection videoId={videoId} />}
+      </StudioRealtimeProvider>
     </TestProvider>
   )
 window.realtimeTest = {

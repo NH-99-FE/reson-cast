@@ -12,15 +12,15 @@ interface StudioLayoutProps {
 export const StudioLayout = ({ children }: StudioLayoutProps) => {
   return (
     <SidebarProvider>
-      <div className="w-full">
-        <StudioNavbar />
-        <div className="flex min-h-screen pt-16">
-          <StudioSidebar />
-          <main className="flex-1 overflow-y-auto">
-            <StudioRealtimeProvider>{children}</StudioRealtimeProvider>
-          </main>
+      <StudioRealtimeProvider>
+        <div className="w-full">
+          <StudioNavbar />
+          <div className="flex min-h-screen pt-16">
+            <StudioSidebar />
+            <main className="flex-1 overflow-y-auto">{children}</main>
+          </div>
         </div>
-      </div>
+      </StudioRealtimeProvider>
     </SidebarProvider>
   )
 }

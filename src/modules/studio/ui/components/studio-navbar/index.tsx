@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { SidebarTrigger } from '@/components/ui/sidebar'
 import { AuthButtons } from '@/modules/auth/ui/components/auth-button'
 
+import { StudioRealtimeIndicator } from '../studio-realtime-provider'
 import StudioUploadModal from '../studio-upload-modal'
 
 export const StudioNavbar = () => {
@@ -14,11 +15,12 @@ export const StudioNavbar = () => {
         <div className="flex flex-shrink-0 items-center">
           <SidebarTrigger />
           <Link prefetch href="/studio" className="hidden md:block">
-            <div className="flex items-center gap-1 p-4">
+            <div className="flex items-center gap-1 py-4 pl-4">
               <Image src="/logo.svg" alt="logo" width={32} height={32}></Image>
               <p className="text-xl font-semibold tracking-tight">工作空间</p>
             </div>
           </Link>
+          <StudioRealtimeIndicator />
         </div>
         {/*占位区域*/}
         <div className="flex-1" />
