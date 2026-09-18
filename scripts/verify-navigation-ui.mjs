@@ -9,6 +9,8 @@ const files = [
   'components/sidebar-navigation.tsx',
   'components/sidebar-navigation.module.css',
   'components/sidebar-page-skeleton.tsx',
+  'components/page-content-skeletons.tsx',
+  'components/ui/table.tsx',
   'components/ui/skeleton.tsx',
   'lib/utils.ts',
 ]
@@ -17,6 +19,9 @@ for (const file of files) {
   await cp(resolve('src', file), join(fixture, 'src', file))
 }
 await symlink(resolve('node_modules'), join(fixture, 'node_modules'))
+await cp(resolve('postcss.config.mjs'), join(fixture, 'postcss.config.mjs'))
+await mkdir(join(fixture, 'src/app'), { recursive: true })
+await cp(resolve('src/app/globals.css'), join(fixture, 'src/app/globals.css'))
 await mkdir(join(fixture, 'src/app/[...slug]'), { recursive: true })
 await writeFile(join(fixture, 'package.json'), JSON.stringify({ private: true }))
 await writeFile(
@@ -38,6 +43,7 @@ await writeFile(
 await writeFile(
   join(fixture, 'src/app/layout.jsx'),
   `
+import './globals.css'
 import { Links } from './links'
 export default function Layout({ children }) {
   return <html><body><Links /><main>{children}</main></body></html>
@@ -85,9 +91,18 @@ await writeFile(
   join(fixture, 'src/app/prefetched/page.jsx'),
   `
 export const dynamic = 'force-dynamic'
+import { Suspense } from 'react'
+import { VideoGridSkeleton } from '@/components/page-content-skeletons'
+async function Content() {
+  await new Promise(resolve => setTimeout(resolve, 2500))
+  return <h2>预取页面真实内容</h2>
+}
 export default async function Page() {
   await new Promise(resolve => setTimeout(resolve, 1500))
-  return <h1>预取页面真实内容</h1>
+  return <div data-stage="data-loading" className="mx-auto mb-10 flex max-w-[2400px] flex-col gap-y-6 px-4 pt-2.5">
+    <div><h1 className="text-2xl font-bold">热点</h1><p className="text-xs text-muted-foreground">当前最受欢迎的视频</p></div>
+    <Suspense fallback={<VideoGridSkeleton />}><Content /></Suspense>
+  </div>
 }
 `
 )

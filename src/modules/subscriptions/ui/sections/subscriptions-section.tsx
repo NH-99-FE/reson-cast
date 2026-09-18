@@ -5,29 +5,18 @@ import { ErrorBoundary } from 'react-error-boundary'
 import { toast } from 'sonner'
 
 import { InfiniteScroll } from '@/components/infinite-scroll'
+import { SubscriptionsSkeleton } from '@/components/page-content-skeletons'
 import { DEFAULT_LIMIT } from '@/constants'
-import { SubscriptionItem, SubscriptionItemSkeleton } from '@/modules/subscriptions/ui/components/subscription-item'
+import { SubscriptionItem } from '@/modules/subscriptions/ui/components/subscription-item'
 import { trpc } from '@/trpc/client'
 
 export const SubscriptionsSection = () => {
   return (
-    <Suspense fallback={<SubscriptionsSectionSkeleton />}>
+    <Suspense fallback={<SubscriptionsSkeleton />}>
       <ErrorBoundary fallback={<p>出错了</p>}>
         <SubscriptionsSectionSuspense />
       </ErrorBoundary>
     </Suspense>
-  )
-}
-
-const SubscriptionsSectionSkeleton = () => {
-  return (
-    <>
-      <div className="flex flex-col gap-4">
-        {Array.from({ length: 15 }).map((_, index) => (
-          <SubscriptionItemSkeleton key={index} />
-        ))}
-      </div>
-    </>
   )
 }
 

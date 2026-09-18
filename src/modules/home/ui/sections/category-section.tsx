@@ -5,6 +5,7 @@ import { Suspense } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 
 import { FilterCarousel } from '@/components/filter-carousel'
+import { CategoryStripSkeleton } from '@/components/page-content-skeletons'
 import { trpc } from '@/trpc/client'
 
 interface CategorySectionProps {
@@ -13,16 +14,12 @@ interface CategorySectionProps {
 
 export const CategorySection = ({ categoryId }: CategorySectionProps) => {
   return (
-    <Suspense fallback={<CategoriesSection />}>
+    <Suspense fallback={<CategoryStripSkeleton />}>
       <ErrorBoundary fallback={<p>出错了！</p>}>
         <CategorySectionSuspense categoryId={categoryId}></CategorySectionSuspense>
       </ErrorBoundary>
     </Suspense>
   )
-}
-
-const CategoriesSection = () => {
-  return <FilterCarousel isLoading onSelect={() => {}} data={[]} />
 }
 
 const CategorySectionSuspense = ({ categoryId }: CategorySectionProps) => {

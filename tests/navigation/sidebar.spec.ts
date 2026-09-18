@@ -113,7 +113,7 @@ for (const failure of ['connection-aborted', 'http-503'] as const) {
   })
 }
 
-test('production default prefetch prepares the route skeleton before navigation', async ({ page }) => {
+test('production prefetch and data loading keep one matching skeleton', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
   const prefetched = page.waitForResponse(
@@ -135,14 +135,33 @@ test('production default prefetch prepares the route skeleton before navigation'
     if (route.request().headers().rsc === '1') await gate
     await route.continue()
   })
+  let routeBoxes: unknown
   try {
     await page.getByRole('link', { name: '预取页面', exact: true }).click()
     await expect(page.getByRole('status', { name: '正在加载热点' })).toBeVisible({ timeout: 1000 })
+    await expect(page.locator('main [data-slot="skeleton"]')).toHaveCount(90)
+    routeBoxes = await page.locator('main [data-slot="skeleton"]').evaluateAll(nodes =>
+      nodes.map(node => {
+        const { x, y, width, height } = node.getBoundingClientRect()
+        return { x, y, width, height }
+      })
+    )
     await expect(page).toHaveURL('/prefetched')
     await expect(page.getByRole('link', { name: '预取页面', exact: true })).toHaveAttribute('aria-current', 'page')
   } finally {
     release()
   }
+  await expect(page.locator('[data-stage="data-loading"]')).toBeVisible()
+  await expect(page.getByRole('status', { name: '正在加载热点' })).toHaveCount(0)
+  await expect(page.locator('main [data-slot="skeleton"]')).toHaveCount(90)
+  const dataBoxes = await page.locator('main [data-slot="skeleton"]').evaluateAll(nodes =>
+    nodes.map(node => {
+      const { x, y, width, height } = node.getBoundingClientRect()
+      return { x, y, width, height }
+    })
+  )
+  expect(dataBoxes).toEqual(routeBoxes)
   await expect(page.getByRole('heading', { name: '预取页面真实内容' })).toBeVisible()
+  await expect(page.locator('main [data-slot="skeleton"]')).toHaveCount(0)
   expect(errors).toEqual([])
 })
