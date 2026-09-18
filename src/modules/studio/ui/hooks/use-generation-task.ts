@@ -178,7 +178,7 @@ export function useGenerationTask({
     retryLabel:
       phase.name === 'sync-error'
         ? '重试同步'
-        : job?.status === 'queued'
+        : job?.status === 'queued' && (!!job.error || phase.name === 'paused')
           ? '重新提交'
           : phase.name === 'paused'
             ? '刷新状态'

@@ -29,6 +29,7 @@ export const state = {
   failPolls: false,
   saveDelay: 0,
   dispatchFails: false,
+  dispatchQueued: false,
   delayNextStatus: false,
   delayedStatusStarted: false,
   pendingCleanup: 0,
@@ -79,7 +80,7 @@ const handle = async ({ path, input }) => {
     const job = {
       id,
       kind,
-      status: state.dispatchFails ? 'queued' : 'running',
+      status: state.dispatchFails || state.dispatchQueued ? 'queued' : 'running',
       account: state.account,
       result: null,
       error: state.dispatchFails ? '任务提交未确认，可重新提交' : null,

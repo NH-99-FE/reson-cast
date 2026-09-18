@@ -6,8 +6,7 @@ import { VideosSection } from '../../src/modules/studio/ui/sections/videos-secti
 import { state, TestProvider, videoId } from './generation-client'
 import { connections } from './realtime-ably'
 
-window.fetch = async () =>
-  Response.json({ clientId: state.account, keyName: 'key', ttl: 600000, nonce: 'nonce', timestamp: Date.now(), mac: 'mac' })
+window.fetch = async () => Response.json({ clientId: state.account, token: 'test-jwt', issued: Date.now(), expires: Date.now() + 600000 })
 const root = createRoot(document.getElementById('root'))
 let serial = 0
 const show = (list = false) =>

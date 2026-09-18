@@ -2,14 +2,14 @@
 
 import { useAuth } from '@clerk/nextjs'
 import { useQueryClient } from '@tanstack/react-query'
-import { Realtime, type TokenRequest } from 'ably'
+import { Realtime, type TokenDetails } from 'ably'
 import { useCallback, useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { refreshStudioQueries } from '@/lib/realtime/cache'
 import { studioChannel, type StudioEvent, studioEventSchema } from '@/lib/realtime/events'
 
-async function getToken(signal?: AbortSignal): Promise<TokenRequest> {
+async function getToken(signal?: AbortSignal): Promise<TokenDetails> {
   const response = await fetch('/api/realtime/auth', { method: 'POST', cache: 'no-store', signal })
   if (!response.ok) throw new Error('实时连接鉴权失败')
   return response.json()
@@ -40,7 +40,7 @@ export function StudioRealtimeProvider({ children }: { children: React.ReactNode
     void getToken(controller.signal)
       .then(initial => {
         if (disposed) return
-        let first: TokenRequest | undefined = initial
+        let first: TokenDetails | undefined = initial
         connection = new Realtime({
           authCallback: (_params, callback) => {
             const token = first
@@ -112,7 +112,13 @@ export function StudioRealtimeProvider({ children }: { children: React.ReactNode
   return (
     <>
       <div role="status" className="flex items-center justify-between gap-3 border-b px-4 py-2 text-sm text-muted-foreground">
-        <span>{status === 'connected' ? '实时同步已连接' : '实时同步暂未连接，后台任务会继续处理'}</span>
+        <span>
+          {status === 'connected'
+            ? '实时同步已连接'
+            : status === 'connecting'
+              ? '正在连接实时同步…'
+              : '实时同步暂未连接，后台任务会继续处理'}
+        </span>
         <Button
           size="sm"
           variant="ghost"

@@ -1,4 +1,4 @@
-import type { TokenRequest } from 'ably'
+import type { TokenDetails } from 'ably'
 
 import { studioCapability } from './events'
 
@@ -7,7 +7,7 @@ export async function authorizeStudio(
   io: {
     clerkId: () => Promise<string | null>
     userId: (clerkId: string) => Promise<string | undefined>
-    sign: (params: { clientId: string; ttl: number; capability: string }) => Promise<TokenRequest>
+    sign: (params: { clientId: string; ttl: number; capability: string }) => TokenDetails | Promise<TokenDetails>
   }
 ) {
   const clerkId = await io.clerkId()

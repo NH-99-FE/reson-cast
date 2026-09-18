@@ -137,6 +137,26 @@ async function run() {
     check(button('保存').disabled, 'save should become clean')
     check(state.writes.at(-1).title === 'Saved user title' && Object.keys(state.writes.at(-1)).length === 2, 'partial save required')
   })
+  await test('healthy queued title and description keep loading until running', async () => {
+    state.dispatchQueued = true
+    for (const [kind, label] of [
+      ['title', '标题'],
+      ['description', '简介'],
+    ]) {
+      button(`AI 生成${label}`).click()
+      await wait(() => latestRun(kind)?.status === 'queued')
+      await delay(100)
+      check(!button(`${label}生成需要处理`), 'healthy queued task shows recovery icon')
+      check(button(`AI 生成${label}`).querySelector('.animate-spin'), 'healthy queued task must keep spinning')
+      latestRun(kind).status = 'running'
+      send('generation.changed', kind)
+      await delay(100)
+      check(!button(`${label}生成需要处理`), 'running task shows recovery icon')
+      check(button(`AI 生成${label}`).querySelector('.animate-spin'), 'running task must keep spinning')
+      await complete(kind)
+    }
+    state.dispatchQueued = false
+  })
   await test('generated field locks; completion preserves other unsaved edits', async () => {
     button('AI 生成标题').click()
     await wait(() => title().disabled && latestRun('title'))

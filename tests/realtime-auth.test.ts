@@ -2,10 +2,11 @@ import assert from 'node:assert/strict'
 import { createHash, createHmac } from 'node:crypto'
 import { test } from 'node:test'
 
-import type { TokenRequest } from 'ably'
+import { Rest } from 'ably'
 
 import { authorizeStudio } from '../src/lib/realtime/auth'
 import { verifyDispatch } from '../src/lib/realtime/signature'
+import { signRealtimeToken } from '../src/lib/realtime/token'
 
 const url = 'https://example.test/api/realtime/dispatch'
 function signed(body = '{}', key = 'current', target = url, expired = false) {
@@ -41,7 +42,7 @@ test('auth rejects guests, missing local users and forged capabilities; derives 
     userId: async () => local,
     sign: async (params: { clientId: string; ttl: number; capability: string }) => {
       calls.push(params)
-      return { ...params, keyName: 'key', timestamp: Date.now(), nonce: 'nonce', mac: 'mac' } as TokenRequest
+      return signRealtimeToken('app.key:secret', params)
     },
   }
   const req = (body?: string) => new Request('https://example.test/api/realtime/auth', { method: 'POST', body })
@@ -57,4 +58,50 @@ test('auth rejects guests, missing local users and forged capabilities; derives 
   local = 'new-owner'
   await authorizeStudio(req(), io)
   assert.equal((calls[1] as { clientId: string }).clientId, 'new-owner')
+})
+
+test('realtime JWT is signed locally with scoped claims and matching SDK expiry', async () => {
+  const params = { clientId: 'owner', ttl: 600000, capability: '{"studio:user:owner":["subscribe"]}' }
+  const result = await signRealtimeToken('app.key:secret', params, 1700000000123)
+  const [header, payload, signature] = result.token.split('.')
+  assert.deepEqual(JSON.parse(Buffer.from(header, 'base64url').toString()), { typ: 'JWT', alg: 'HS256', kid: 'app.key' })
+  assert.deepEqual(JSON.parse(Buffer.from(payload, 'base64url').toString()), {
+    iat: 1700000000,
+    exp: 1700000600,
+    'x-ably-clientId': params.clientId,
+    'x-ably-capability': params.capability,
+  })
+  assert.equal(signature, createHmac('sha256', 'secret').update(`${header}.${payload}`).digest('base64url'))
+  assert.equal(result.issued, 1700000000000)
+  assert.equal(result.expires, 1700000600000)
+  assert.equal(result.clientId, params.clientId)
+  assert.equal(result.capability, params.capability)
+  for (const key of [undefined, '', 'missing-secret', ':secret', 'app.key:']) {
+    await assert.rejects(() => signRealtimeToken(key, params), /Ably is not configured/)
+  }
+})
+
+test('Ably SDK accepts signed token details directly on initial auth and renewal', async () => {
+  let renewals = 0
+  const client = new Rest({
+    authCallback: (_params, callback) => {
+      renewals++
+      void signRealtimeToken('app.key:secret', {
+        clientId: 'owner',
+        ttl: 600000,
+        capability: '{"studio:user:owner":["subscribe"]}',
+      }).then(
+        token => callback(null, token),
+        () => callback('Signing failed', null)
+      )
+    },
+  })
+  // Any attempted token exchange would fail: this key does not exist at Ably.
+  for (let i = 0; i < 2; i++) {
+    const token = await client.auth.requestToken()
+    assert.equal(token.clientId, 'owner')
+    assert.equal(token.expires - token.issued, 600000)
+    assert.equal(token.token.split('.').length, 3)
+  }
+  assert.equal(renewals, 2)
 })
