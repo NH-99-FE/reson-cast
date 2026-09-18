@@ -19,6 +19,7 @@
     "db:view": "drizzle-kit studio",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:ui": "playwright test",
+    "test:ui:navigation": "playwright test -c playwright.navigation.config.ts",
     "typecheck": "tsc --noEmit",
     "test:ui:serve": "node scripts/verify-generation-ui.mjs"
   },

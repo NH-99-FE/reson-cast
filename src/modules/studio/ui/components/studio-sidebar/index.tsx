@@ -1,9 +1,9 @@
 'use client'
 
 import { LogOutIcon, VideoIcon } from 'lucide-react'
-import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+import { SidebarNavigationLink } from '@/components/sidebar-navigation'
 import { Separator } from '@/components/ui/separator'
 import { Sidebar, SidebarContent, SidebarGroup, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar'
 
@@ -19,19 +19,19 @@ export const StudioSidebar = () => {
             <StudioSidebarHeader />
             <SidebarMenuItem>
               <SidebarMenuButton isActive={pathname === '/studio'} tooltip="视频内容" asChild>
-                <Link prefetch href="/studio">
+                <SidebarNavigationLink href="/studio">
                   <VideoIcon className="size-5" />
                   <span className="text-sm">视频内容</span>
-                </Link>
+                </SidebarNavigationLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <Separator />
             <SidebarMenuItem>
               <SidebarMenuButton tooltip="退出工作空间" asChild>
-                <Link prefetch href="/">
+                <SidebarNavigationLink href="/">
                   <LogOutIcon className="size-5" />
                   <span className="text-sm">退出工作空间</span>
-                </Link>
+                </SidebarNavigationLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

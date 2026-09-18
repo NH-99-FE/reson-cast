@@ -1,0 +1,37 @@
+.link {
+  position: relative;
+}
+
+/* A corner indicator leaves both expanded labels and collapsed icons in place. */
+.hint {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.hint[data-pending='true'] {
+  animation: pending 1s ease-in-out 100ms infinite;
+}
+
+@keyframes pending {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint[data-pending='true'] {
+    animation: none;
+    opacity: 0.6;
+  }
+}

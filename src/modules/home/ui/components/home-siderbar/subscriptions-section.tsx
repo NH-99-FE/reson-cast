@@ -2,9 +2,9 @@
 
 import { useAuth } from '@clerk/nextjs'
 import { ListIcon } from 'lucide-react'
-import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+import { SidebarNavigationLink } from '@/components/sidebar-navigation'
 import { Separator } from '@/components/ui/separator'
 import {
   SidebarGroup,
@@ -68,10 +68,10 @@ export const SubscriptionsSection = () => {
               subscriptions.map(subscription => (
                 <SidebarMenuItem key={`${subscription.creatorId}-${subscription.viewerId}`}>
                   <SidebarMenuButton tooltip={subscription.user.name} asChild isActive={pathname === `/users/${subscription.user.id}`}>
-                    <Link prefetch href={`/users/${subscription.user.id}`} className="flex items-center gap-5">
+                    <SidebarNavigationLink href={`/users/${subscription.user.id}`} className="flex items-center gap-5">
                       <UserAvatar size="xs" imageUrl={subscription.user.imageUrl} name={subscription.user.name} />
                       <span className="text-sm">{subscription.user.name}</span>
-                    </Link>
+                    </SidebarNavigationLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -95,10 +95,10 @@ export const SubscriptionsSection = () => {
             {!isLoading && !error && (
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === '/subscriptions'}>
-                  <Link prefetch href="/subscriptions" className="flex items-center gap-4">
+                  <SidebarNavigationLink href="/subscriptions" className="flex items-center gap-4">
                     <ListIcon className="size-4" />
                     <span className="text-sm">订阅列表</span>
-                  </Link>
+                  </SidebarNavigationLink>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}

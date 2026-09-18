@@ -2,9 +2,9 @@
 
 import { useAuth, useClerk } from '@clerk/nextjs'
 import { FlameIcon, HomeIcon, PlaySquareIcon } from 'lucide-react'
-import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+import { SidebarNavigationLink } from '@/components/sidebar-navigation'
 import { SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar'
 
 const items = [
@@ -47,10 +47,10 @@ export const MainSection = () => {
                   }
                 }}
               >
-                <Link prefetch href={item.url} className="flex items-center gap-4">
+                <SidebarNavigationLink href={item.url} className="flex items-center gap-4">
                   <item.icon />
                   <span className="text-sm">{item.title}</span>
-                </Link>
+                </SidebarNavigationLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
