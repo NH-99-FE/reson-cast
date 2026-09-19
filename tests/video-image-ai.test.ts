@@ -1,7 +1,38 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { getImageAIConfig, readImageAIResult } from '../src/lib/video-image-ai'
+import { createImageAIRequest, getImageAIConfig, readImageAIResult } from '../src/lib/video-image-ai'
+
+test('thumbnail requests use 1K landscape images and Agnes URL output', () => {
+  const config = {
+    IMAGE_AI_API_URL: 'https://apihub.agnes-ai.com/v1/images/generations',
+    IMAGE_AI_API_KEY: 'test-image-key',
+    IMAGE_AI_MODEL: 'agnes-image-2.5-flash',
+  }
+  const saved = Object.fromEntries(Object.keys(config).map(key => [key, process.env[key]]))
+  try {
+    Object.assign(process.env, config)
+    const request = createImageAIRequest('生成一张简洁的视频封面')
+    assert.equal(request.url, config.IMAGE_AI_API_URL)
+    assert.equal(request.method, 'POST')
+    assert.deepEqual(request.headers, {
+      Authorization: `Bearer ${config.IMAGE_AI_API_KEY}`,
+      'Content-Type': 'application/json',
+    })
+    assert.deepEqual(request.body, {
+      model: config.IMAGE_AI_MODEL,
+      prompt: '生成一张简洁的视频封面',
+      size: '1K',
+      ratio: '16:9',
+      extra_body: { response_format: 'url' },
+    })
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  }
+})
 
 test('missing image configuration does not fall back to the text provider', () => {
   const saved = process.env.IMAGE_AI_API_KEY

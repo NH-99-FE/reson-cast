@@ -15,13 +15,20 @@ export function getImageAIConfig() {
   return { endpoint, apiKey, model }
 }
 
+// Agnes image API adapter: other providers must support these size, ratio and URL-output parameters.
 export function createImageAIRequest(prompt: string) {
   const { endpoint, apiKey, model } = getImageAIConfig()
   return {
     url: endpoint,
     method: 'POST' as const,
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: { model, prompt },
+    body: {
+      model,
+      prompt,
+      size: '1K',
+      ratio: '16:9',
+      extra_body: { response_format: 'url' },
+    },
   }
 }
 

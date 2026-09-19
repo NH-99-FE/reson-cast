@@ -18,7 +18,7 @@ const { POST: workflowPost } = serve(
     const { status, body } = await context.call<ImageAIResponse>('generate-thumbnail', createImageAIRequest(prompt))
     const imageUrl = readImageAIResult(status, body)
     const upload = await context.run('upload-thumbnail', async () => {
-      const { data, error } = await new UTApi().uploadFilesFromUrl(imageUrl, { acl: 'private' })
+      const { data, error } = await new UTApi().uploadFilesFromUrl(imageUrl)
       if (error || !data) throw new Error('生成的封面上传失败')
       return data
     })

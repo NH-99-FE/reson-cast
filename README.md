@@ -1,4 +1,4 @@
-  # Reson Cast - 现代化视频分享平台
+# Reson Cast - 现代化视频分享平台
 
 <div align="center">
   <img src="https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js" alt="Next.js" />
@@ -232,7 +232,6 @@ src/
   Made with ❤️ llh
 </div>
 
-
 ### DeepSeek 配置与验证
 
 标题和简介共用 `src/lib/video-ai.ts`，读取 `API_KEY`、`AI_API_URL`、`MODEL_ID`。
@@ -253,13 +252,15 @@ RUN_AI_TEST=1 pnpm exec tsx scripts/verify-video-ai.ts
 DeepSeek 未提供图片生成接口，AI 封面使用独立服务。未配置时入口会提示“AI 封面服务尚未配置”，不会提交工作流。
 
 ```env
-# 完整生图接口 URL（包含 images/generations 等实际路径）
-IMAGE_AI_API_URL=
+# Agnes 生图接口（服务端）
+IMAGE_AI_API_URL=https://apihub.agnes-ai.com/v1/images/generations
 IMAGE_AI_API_KEY=
-IMAGE_AI_MODEL=
+IMAGE_AI_MODEL=agnes-image-2.5-flash
 ```
 
-当前适配同步 JSON 生图接口：Bearer 鉴权，请求 `{ model, prompt }`，使用模型默认尺寸；
-响应支持 `data[0].url` 或 `images[0].url`（HTTPS 图片链接）。配置兼容服务后即可使用。
-只返回 Base64、异步任务 ID，或需要额外必填参数的模型需要补充适配，不能只换模型名。
-图片仍通过 UploadThing 私密上传，并沿用删除保护和旧封面清理逻辑。
+当前适配 Agnes 同步 JSON 生图接口：Bearer 鉴权，封面固定请求 `size: "1K"`、`ratio: "16:9"`
+（原生输出 `1312×736`），并通过 `extra_body.response_format: "url"` 返回图片链接。
+响应支持 `data[0].url` 或 `images[0].url`（HTTPS 图片链接）。
+其他服务若不兼容这些请求参数，或只返回 Base64、异步任务 ID，需要补充适配，不能只换模型名。
+图片通过 UploadThing 默认公开存储上传，不覆盖 ACL，兼容免费套餐，并沿用删除保护和旧封面清理逻辑。
+自定义及 AI 封面的源文件直链不受视频可见性保护；即使视频转私有，持有直链的人仍可访问封面。

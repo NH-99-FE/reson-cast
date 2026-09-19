@@ -28,7 +28,8 @@ export async function videoImageResponse(params: { videoId: string; kind: string
     if (key) url = await access.signFile(key, 60)
     else if (video.muxPlaybackId) url = await access.signMux(video.muxPlaybackId, input.data.kind, input.data.width === '640' ? 640 : 1280)
     else return new Response(null, { status: 404, headers: noStore })
-    // Each new request checks current visibility; the signed target lasts 60 seconds.
+    // The app entry checks visibility. Mux/private files use 60s signatures;
+    // public UploadThing files remain accessible through their unsigned source URL.
     return new Response(null, { status: 307, headers: { ...noStore, Location: url } })
   } catch (error) {
     if (error instanceof TRPCError && error.code === 'NOT_FOUND') return new Response(null, { status: 404, headers: noStore })
