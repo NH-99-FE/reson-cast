@@ -58,10 +58,65 @@ RUN_VIDEO_RECOVERY=1 pnpm exec tsx scripts/retry-video-work.ts
 
 running 任务由 Workflow 执行/重试；如果失败回调本身未能落库，先在 Upstash 控制台恢复失败回调，不直接创建另一个任务。应用不会因为等待时间长而擅自把正在执行的任务标成失败。
 
+## 历史任务清理
+
+`GENERATION_JOB_RETENTION_DAYS` 是服务端正整数配置，默认 30 天；空字符串、0、负数或非法值会拒绝清理。部署代码不会自动创建定时任务。
+
+任务必须同时满足以下条件才可删除：状态为 completed/failed/conflict、finished_at 非空且严格早于截止时间、同视频同类型存在按 `created_at DESC, id DESC` 排序更新的任务。最新任务始终保留，包括待采用的文本冲突结果。queued/running、近期记录和缺少完成时间的异常记录均保留。不清空 prompt/result，不改变任务状态，也不清理 `video_file_cleanup` 中阻止旧文件重新挂载的记录。
+
+这是“时间窗口内历史 + 每种类型最新任务”的保留策略，不是全表容量硬上限。更旧的未采用冲突结果过期后也会删除；活动或异常任务长期积压需要单独排查。标题/简介冲突可以采用到编辑框再保存；封面冲突仍沿用现有文件清理行为，不因保留任务行而承诺保留图片资源。
+
+### 执行方式
+
+脚本读取 `.env`；可用 `DOTENV_CONFIG_PATH` 指定环境文件，已有进程环境变量优先。输出只展示数据库主机和库名，不输出凭据。先确认目标环境，再预览：
+
+```sh
+pnpm jobs:cleanup
+# 额外输出候选批次和计数查询的 EXPLAIN JSON（不执行 ANALYZE 或 DELETE）
+pnpm jobs:cleanup --explain
+# 显式执行一次；和维护 API 使用同一服务与筛选条件
+pnpm jobs:cleanup --execute
+```
+
+预览包括候选总数、最早完成时间、最多 20 条样本和健康统计；不输出 prompt/result。预览只是当时的快照，执行时重新判断资格，不能保证两个时刻数量一致。
+
+核对业务恢复期限、预览数量和查询计划后，再创建每日一次的 QStash 调度：
+
+```sh
+pnpm jobs:cleanup schedule production
+# 本地 ngrok 联调使用不同 ID，不能覆盖生产调度
+pnpm jobs:cleanup schedule development
+```
+
+调度分别使用 `video-generation-cleanup-production` / `video-generation-cleanup-development`，目标为 `UPSTASH_WORKFLOW_URL/api/videos/maintenance/generation-jobs`，每天 UTC 03:15（上海时间 11:15）执行，自动重试次数为 0。相同环境重复配置使用相同 ID；生产目标拒绝 localhost 和 ngrok。目标 URL 指向的部署决定所用数据库，仅指定 schedule environment 不会切换 `.env`。API 校验 QStash 签名、原始请求体和目标 URL，支持当前/下一把轮换密钥，忽略请求体里的保留期或批量参数。
+
+停止自动清理时，在 QStash 控制台暂停或删除对应 schedule；已经运行的批次可能仍会完成。数据库超时、网络中断或签名问题应先排查日志，再手动重跑。下一次每日运行也会继续处理剩余历史。
+
+### 执行上限与日志
+
+每批一条 CTE 使用 `FOR UPDATE SKIP LOCKED` 选取并删除最多 500 条，每批独立事务，单次最多 10 批。运行预算为 40 秒，剩余不足一次请求的 8 秒预算时不再开新批次；单次 HTTP 请求最多等待 8 秒。每笔 Neon HTTP 非交互事务先设置事务内 `statement_timeout=5s`、`lock_timeout=500ms`，再执行查询。数据库超时会回滚当前事务；前面已提交的批次保留，下次重新筛选即可。
+
+每次运行只做健康统计与有界删除，不先扫描全量候选计数。日志包括截止时间、确认删除数、批数、耗时和停止原因：`batch_limit`、`time_budget` 或 `no_unlocked_candidates`。最后一种仅表示没有选到未锁定的候选，不能证明全库积压为零。并发调用各自最多删除 5000 条，这不是每天的全局上限。网络响应丢失时，实际提交数量可能大于日志中确认的数量；不要据此补偿或重建记录，安全重跑即可。
+
+健康统计独立使用 24 小时阈值报告 stale_queued、stale_running、oldest_stale_at，以及终态缺少 finished_at 的数量。它只用于排查，不判定任务失败。长期频繁触及批次/时间上限时，先用预览观察候选数量和最早完成时间的趋势，再调整调度或索引。复用现有 `video_generation_latest` 索引；只有实际执行计划证明需要时，才增加覆盖终态记录的 `(finished_at, id)` 部分索引。候选排序列和最新任务排序列在任务创建后应保持不变。
+
+`LIMIT 500` 限制的是每批选中和删除的记录数，不保证只扫描 500 行。筛选、判断是否存在更新任务、排序及跳过锁定行都可能访问更多数据；健康统计本身也有扫描成本。超时能限制单次执行耗时，但不能保证持续取得清理进展：若反复在选出候选前超时，应排查性能，不能仅靠每日重跑。
+
+`--explain` 输出估算计划，不包含实测耗时和缓冲区访问；小表或候选数为 0 的预览不能证明大表性能。需要评估增长后的负载时，在有代表性数据的测试环境，对候选 SELECT、预览统计和健康统计运行 `EXPLAIN (ANALYZE, BUFFERS)`，检查实际扫描/过滤行数、排序、缓冲区访问与耗时。不要把 ANALYZE 直接加到 DELETE 上。只有这些结果显示确有收益时再增加部分索引；索引也不会把扫描行数严格限制为 500。
+
+### 回调与恢复边界
+
+- 活动任务允许沿用原 jobId/Workflow ID 重投或继续执行。
+- 终态不可重新激活；重复回调不重复写内容。重新生成创建新 jobId 和 Workflow ID。
+- 保留期间可以返回已保存的任务结果；任务删除后，带 jobId 的回调只返回 `outcome: ignored, reason: job_missing`，不会重建任务或转入无 jobId 的兼容分支。这是处理结果，不是数据库的新状态。
+- 如果旧工作流已经缓存 start-job 并继续回放，最后写回仍以数据库任务记录为门槛。封面回调产生的未挂载文件进入现有清理队列，当前正在使用的封面不能被误删。
+- 保留期应覆盖产品承诺的历史查看、排查和人工恢复期限，并留出缓冲。Upstash DLQ 的 Restart/Resume 不会让应用中的终态重新激活；重放失败回调用于修复仍为活动状态的任务。DLQ 自身的保留期取决于套餐，参见[官方文档](https://upstash.com/docs/workflow/features/dlq)。超出本地保留期限的回调仍须无副作用，但无法返回已删除的原始结果。
+
 ## 验证
 
 ```sh
 pnpm test
+TEST_DATABASE_URL=postgresql://user:password@127.0.0.1:5432/test_database pnpm test:postgres
 pnpm typecheck
 pnpm lint
 pnpm exec playwright install chromium
@@ -72,4 +127,6 @@ pnpm test:ui
 
 `pnpm test:ui` 自动启动模拟服务页面、运行 Chromium 并返回退出码。覆盖真实 React 表单和查询库的脏字段保存、并行生成、同步失败、跨页面/账号恢复、暂停继续、投递重试、清理恢复等。需要手动查看时使用 `pnpm test:ui:serve`。
 
-这些测试不能代替真实 Mux、QStash、AI、UploadThing 联调，也不模拟多连接 PostgreSQL 的所有并发调度。第三方已接受请求但应用尚未获得资源 ID 的中断，仍依赖该服务的幂等/回调能力及运维排查。
+`pnpm test:postgres` 必须显式指定一次性测试数据库，不读取 `.env`，也不回退到 DATABASE_URL。测试在随机 schema 中建表，结束后删除该 schema；使用三个独立连接验证清理请求互相跳锁、回调与删除竞争以及并发插入的可见性。GitHub Actions 会启动独立 PostgreSQL 服务运行这些测试；普通 `pnpm test` 仍无需数据库服务。Neon 请求中的事务内超时配置由 API 测试检查。
+
+这些测试不能代替真实 Mux、QStash、AI、UploadThing 联调，也不覆盖 PostgreSQL 的所有并发调度。第三方已接受请求但应用尚未获得资源 ID 的中断，仍依赖该服务的幂等/回调能力及运维排查。

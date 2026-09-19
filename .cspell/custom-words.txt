@@ -11,3 +11,5 @@ ilike
 Reson
 nosniff
 QSTASH
+neondatabase
+SQLSTATE

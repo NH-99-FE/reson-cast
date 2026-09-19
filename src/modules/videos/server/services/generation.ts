@@ -16,6 +16,13 @@ export type GenerationKind = typeof videoGenerationJobs.$inferSelect.kind
 export type GenerationJob = typeof videoGenerationJobs.$inferSelect
 export const isGenerationActive = (status: GenerationJob['status']) => status === 'queued' || status === 'running'
 
+// A transport outcome, never a persisted task status. Pruned tasks must not be
+// recreated or treated as legacy (jobId-less) writes when their callbacks arrive.
+export function ignoredGenerationJob(jobId: string) {
+  console.info('Generation callback ignored', { jobId, reason: 'job_missing' })
+  return { outcome: 'ignored' as const, reason: 'job_missing' as const, status: null, result: null }
+}
+
 function workflowUrl(kind: GenerationKind) {
   const base = process.env.UPSTASH_WORKFLOW_URL?.replace(/\/+$/, '')
   if (!base) throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Workflow URL 尚未配置' })
@@ -133,7 +140,7 @@ export async function finishTextGeneration(jobId: string, kind: VideoAIKind, con
   const result = await db.execute<{ status: GenerationJob['status']; result: string | null }>(
     finishTextGenerationQuery(jobId, kind, content)
   )
-  return result.rows[0] ?? { status: 'conflict' as const, result: content }
+  return result.rows[0] ?? ignoredGenerationJob(jobId)
 }
 
 export async function failGeneration(jobId: string) {

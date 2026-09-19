@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { after, before, mock, test } from 'node:test'
 
 import { PGlite } from '@electric-sql/pglite'
+import type { SQL } from 'drizzle-orm'
 import { getTableConfig } from 'drizzle-orm/pg-core'
 
 process.env.DATABASE_URL = 'postgresql://test:test@localhost/test'
@@ -20,6 +21,7 @@ const { startVideoGeneration, retryVideoGeneration, beginGeneration, finishTextG
   await import('../src/modules/videos/server/services/generation')
 const { restoreVideoThumbnail, cleanupVideoFiles, pendingFileCleanup } = await import('../src/modules/videos/server/services/thumbnails')
 const { updateVideo, resumePlaybackRevocation } = await import('../src/modules/videos/server/services/update')
+const { generationCleanupPolicy, runGenerationCleanup } = await import('../src/modules/videos/server/services/generation-cleanup')
 const pg = new PGlite()
 const owner = '00000000-0000-4000-8000-000000000001'
 const videoId = '00000000-0000-4000-8000-000000000002'
@@ -93,6 +95,49 @@ test('other users cannot discover or retry a generation task', async () => {
     const other = '00000000-0000-4000-8000-000000000009'
     await assert.rejects(getGenerationJob(videoId, other, 'title'), error => (error as { code: string }).code === 'NOT_FOUND')
     await assert.rejects(retryVideoGeneration(job.id, other), error => (error as { code: string }).code === 'NOT_FOUND')
+  } finally {
+    trigger.mock.restore()
+  }
+})
+
+test('cleanup preserves latest conflict recovery and regeneration; pruned callbacks are ignored', async () => {
+  await reset()
+  const trigger = mock.method(workflow, 'trigger', async () => ({ workflowRunId: 'test' }))
+  try {
+    const old = await startVideoGeneration('title', videoId, owner)
+    await finishTextGeneration(old.id, 'title', 'Old result')
+    const latest = await startVideoGeneration('title', videoId, owner)
+    await pg.query("UPDATE videos SET title='User edit'")
+    await finishTextGeneration(latest.id, 'title', 'Conflict suggestion')
+    // Both are expired; the conflict remains protected because it is the latest.
+    await pg.query("UPDATE video_generation_jobs SET created_at='2026-01-01',finished_at='2026-01-02' WHERE id=$1", [old.id])
+    await pg.query("UPDATE video_generation_jobs SET created_at='2026-02-01',finished_at='2026-02-02' WHERE id=$1", [latest.id])
+    const result = await runGenerationCleanup(
+      async <Row extends Record<string, unknown>>(query: SQL<Row>) => (await db.execute<Row>(query)).rows,
+      generationCleanupPolicy('30', new Date('2026-09-19'))
+    )
+    assert.equal(result.deleted, 1)
+    const recovered = await getGenerationJob(videoId, owner, 'title')
+    assert.equal(recovered?.id, latest.id)
+    assert.equal(recovered?.result, 'Conflict suggestion')
+    assert.equal(recovered?.status, 'conflict')
+    assert.equal(await getGenerationJob(videoId, owner, 'title', old.id), null)
+    assert.equal(await beginGeneration(old.id, videoId, owner, 'title'), null)
+    assert.deepEqual(await finishTextGeneration(old.id, 'title', 'Late result'), {
+      outcome: 'ignored',
+      reason: 'job_missing',
+      status: null,
+      result: null,
+    })
+    await failGeneration(old.id)
+    assert.equal((await pg.query<{ title: string }>('SELECT title FROM videos')).rows[0].title, 'User edit')
+    await updateVideo({ id: videoId, title: recovered!.result! }, owner)
+    assert.equal((await pg.query<{ title: string }>('SELECT title FROM videos')).rows[0].title, 'Conflict suggestion')
+    assert.equal((await retryVideoGeneration(latest.id, owner)).status, 'conflict', 'terminal tasks never reactivate')
+    const next = await startVideoGeneration('title', videoId, owner)
+    assert.notEqual(next.id, latest.id)
+    assert.equal(next.status, 'queued')
+    assert.equal((await retryVideoGeneration(next.id, owner)).id, next.id)
   } finally {
     trigger.mock.restore()
   }

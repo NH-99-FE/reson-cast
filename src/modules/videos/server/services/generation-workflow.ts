@@ -9,7 +9,7 @@ import { authenticatedWorkflow } from '@/lib/workflow-auth'
 import { requireVideo } from '@/modules/videos/server/services/access'
 import { saveGeneratedVideo } from '@/modules/videos/server/services/legacy-generation-save'
 
-import { beginGeneration, failGeneration, finishTextGeneration, isGenerationActive } from './generation'
+import { beginGeneration, failGeneration, finishTextGeneration, ignoredGenerationJob, isGenerationActive } from './generation'
 
 export const videoGenerationInput = z.object({ userId: z.uuid(), videoId: z.uuid(), jobId: z.uuid().optional() })
 export const thumbnailGenerationInput = videoGenerationInput.extend({ prompt: z.string().trim().min(10).max(2000) })
@@ -48,7 +48,7 @@ export function createVideoTextWorkflow(kind: VideoAIKind) {
         ? await context.run('start-job', () => beginGeneration(input.jobId!, input.videoId, input.userId, kind))
         : null
       if (job && !isGenerationActive(job.status)) return { status: job.status }
-      if (input.jobId && !job) throw new Error('生成任务不存在')
+      if (input.jobId && !job) return ignoredGenerationJob(input.jobId)
       const transcript = await context.run('get-transcript', () => getTranscript(video))
       const { status, body } = await context.call<VideoAIResponse>(`generated-${kind}`, createVideoAIRequest(kind, transcript))
       const content = readVideoAIResult(status, body)

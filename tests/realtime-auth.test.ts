@@ -4,8 +4,8 @@ import { test } from 'node:test'
 
 import { Rest } from 'ably'
 
+import { verifyQStashRequest } from '../src/lib/qstash'
 import { authorizeStudio } from '../src/lib/realtime/auth'
-import { verifyDispatch } from '../src/lib/realtime/signature'
 import { signRealtimeToken } from '../src/lib/realtime/token'
 
 const url = 'https://example.test/api/realtime/dispatch'
@@ -21,8 +21,8 @@ function signed(body = '{}', key = 'current', target = url, expired = false) {
 }
 const request = (signature: string, body = '{}') => new Request(url, { method: 'POST', body, headers: { 'upstash-signature': signature } })
 test('dispatch verifies signature, both rotation keys, expiry, body and destination', async () => {
-  assert.ok(await verifyDispatch(request(signed()), 'current', 'next', url))
-  assert.ok(await verifyDispatch(request(signed('{}', 'next')), 'current', 'next', url))
+  assert.ok(await verifyQStashRequest(request(signed()), 'current', 'next', url))
+  assert.ok(await verifyQStashRequest(request(signed('{}', 'next')), 'current', 'next', url))
   for (const req of [
     request('forged'),
     request(signed(), 'tampered'),
@@ -30,7 +30,7 @@ test('dispatch verifies signature, both rotation keys, expiry, body and destinat
     request(signed('{}', 'current', url, true)),
     new Request(url),
   ]) {
-    assert.equal(await verifyDispatch(req, 'current', 'next', url), false)
+    assert.equal(await verifyQStashRequest(req, 'current', 'next', url), false)
   }
 })
 test('auth rejects guests, missing local users and forged capabilities; derives identity on each renewal', async () => {

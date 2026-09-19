@@ -38,7 +38,12 @@ export async function replaceVideoThumbnail(input: Parameters<typeof replaceThum
   } catch {
     console.error('Thumbnail cleanup deferred', { videoId: input.videoId })
   }
-  return result.rows[0]
+  const outcome = result.rows[0]
+  if (input.jobId && outcome.status === null) {
+    console.info('Generation callback ignored', { jobId: input.jobId, reason: 'job_missing' })
+    return { ...outcome, outcome: 'ignored' as const, reason: 'job_missing' as const }
+  }
+  return outcome
 }
 
 export async function restoreVideoThumbnail(videoId: string, userId: string) {

@@ -3,10 +3,10 @@ import { randomUUID } from 'node:crypto'
 import { sql } from 'drizzle-orm'
 
 import { db } from '@/db'
+import { verifyQStashRequest } from '@/lib/qstash'
 import { deliverEvent, type OutboxRow } from '@/lib/realtime/delivery'
 import { acknowledgeEvent, claimEvents, failEvent } from '@/lib/realtime/queries'
 import { realtimeServer, wakeOutbox } from '@/lib/realtime/server'
-import { verifyDispatch } from '@/lib/realtime/signature'
 
 export const maxDuration = 60
 export async function POST(request: Request) {
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   if (!currentSigningKey || !nextSigningKey || !base) {
     return new Response('Dispatch unavailable', { status: 503 })
   }
-  if (!(await verifyDispatch(request, currentSigningKey, nextSigningKey, `${base}/api/realtime/dispatch`))) {
+  if (!(await verifyQStashRequest(request, currentSigningKey, nextSigningKey, `${base}/api/realtime/dispatch`))) {
     return new Response('Unauthorized', { status: 401 })
   }
   const token = randomUUID()
