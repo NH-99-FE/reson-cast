@@ -9,11 +9,13 @@ const client = resolve('tests/browser/generation-client.jsx')
 const stubs = {
   '@clerk/nextjs': `import { state } from ${JSON.stringify(client)}; export const useAuth = () => ({userId: state.account, isLoaded: true});`,
   'next/navigation': 'export const useRouter = () => ({push() {}});',
-  'next/image': 'export default function Image({fill, unoptimized, priority, ...props}) { return <img {...props}/> }',
+  'next/image':
+    'export default function Image({fill, unoptimized, priority, ...props}) { return <img data-unoptimized={!!unoptimized} {...props}/> }',
   'next/link': 'export default function Link({prefetch, ...props}) { return <a {...props}/> }',
   '@/modules/studio/ui/components/thumbnail-generate-modal': 'export const ThumbnailGenerateModal = () => null;',
   '@/modules/studio/ui/components/thumbnail-upload-modal': 'export const ThumbnailUploadModal = () => null;',
-  '@/modules/videos/ui/components/video-player': 'export const VideoPlayer = () => <div>Mock media player</div>;',
+  '@/modules/videos/ui/components/video-player':
+    'export const VideoPlayer = ({thumbnailUrl}) => <div data-testid="mock-player" data-thumbnail-url={thumbnailUrl}>Mock media player</div>;',
 }
 const result = await build({
   entryPoints: ['tests/browser/generation-ui.jsx'],

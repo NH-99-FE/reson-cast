@@ -36,6 +36,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { APP_URL } from '@/constants'
 import { videoUpdateSchema } from '@/db/schema'
 import { formatVideoStatus } from '@/lib/utils'
+import { cardThumbnailSource, isPublicThumbnail, videoThumbnailSource } from '@/lib/video-image-source'
 import { GenerationAction } from '@/modules/studio/ui/components/generation-action'
 import { ThumbnailGenerateModal } from '@/modules/studio/ui/components/thumbnail-generate-modal'
 import { ThumbnailUploadModal } from '@/modules/studio/ui/components/thumbnail-upload-modal'
@@ -155,6 +156,12 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
 
   const [video, videoQuery] = trpc.studio.getOne.useSuspenseQuery({ id: videoId })
   const [categories] = trpc.categories.getMany.useSuspenseQuery()
+  const thumbnailUrl = videoThumbnailSource(video)
+  // Public sources are already versioned and require a query-free canonical URL.
+  const posterUrl =
+    thumbnailUrl && video.visibility !== 'public'
+      ? `${thumbnailUrl}${thumbnailUrl.includes('?') ? '&' : '?'}cover=${encodeURIComponent(video.thumbnailKey ?? 'mux')}`
+      : thumbnailUrl
 
   const form = useForm<z.infer<typeof videoUpdateSchema>>({
     resolver: zodResolver(videoUpdateSchema),
@@ -435,11 +442,12 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                 <div className="group relative h-[84px] w-[153px] border border-dashed border-neutral-400 p-0.5">
                   <Image
                     key={`${video.id}:${video.thumbnailKey ?? 'mux'}`}
-                    src={video.thumbnailUrl || THUMBNAIL_FALLBACK}
+                    src={cardThumbnailSource(thumbnailUrl) || THUMBNAIL_FALLBACK}
                     alt="thumbnail"
                     className="object-cover"
                     fill
-                    unoptimized
+                    sizes="153px"
+                    unoptimized={!isPublicThumbnail(thumbnailUrl)}
                   />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -524,14 +532,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
             <div className="flex flex-col gap-y-8 lg:col-span-2">
               <div className="flex h-fit flex-col gap-4 overflow-hidden rounded-xl bg-[#F9F9F9]">
                 <div className="ralative aspect-video overflow-hidden">
-                  <VideoPlayer
-                    videoId={video.id}
-                    thumbnailUrl={
-                      video.thumbnailUrl
-                        ? `${video.thumbnailUrl}${video.thumbnailUrl.includes('?') ? '&' : '?'}cover=${encodeURIComponent(video.thumbnailKey ?? 'mux')}`
-                        : null
-                    }
-                  />
+                  <VideoPlayer videoId={video.id} thumbnailUrl={posterUrl} />
                 </div>
                 <div className="flex flex-col gap-y-6 p-4">
                   <div className="flex items-center justify-between gap-x-2">

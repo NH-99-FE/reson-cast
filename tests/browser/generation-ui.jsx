@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client'
 import { toast } from 'sonner'
 
+import { cardThumbnailSource, publicMuxThumbnailPath, publicThumbnailPath } from '../../src/lib/video-image-source'
 import { StudioRealtimeProvider } from '../../src/modules/studio/ui/components/studio-realtime-provider'
 import { FormSection as StudioFormSection } from '../../src/modules/studio/ui/sections/form-section'
 import { VideosSection as StudioVideosSection } from '../../src/modules/studio/ui/sections/videos-section'
@@ -339,6 +340,42 @@ async function run() {
       state.video.thumbnailUrl = '/mock-cover'
       await state.refresh()
       await wait(() => document.querySelector('img[alt="thumbnail"]') !== previous)
+    }
+  })
+  await test('studio public covers share canonical sources across the form, player and list; private covers retain authentication', async () => {
+    const authenticatedUrl = `/api/videos/${videoId}/image/thumbnail?v=current`
+    for (const visibility of ['public', 'private']) {
+      for (const thumbnailKey of [null, 'cover-a', 'cover-b', null]) {
+        Object.assign(state.video, { visibility, thumbnailKey, thumbnailUrl: authenticatedUrl, muxPlaybackId: 'studio-mux' })
+        const source =
+          visibility === 'public'
+            ? thumbnailKey
+              ? publicThumbnailPath(videoId, thumbnailKey)
+              : publicMuxThumbnailPath(videoId, 'studio-mux')
+            : authenticatedUrl
+        const poster = visibility === 'public' ? source : `${source}&cover=${encodeURIComponent(thumbnailKey ?? 'mux')}`
+        await state.refresh()
+        await wait(
+          () =>
+            document.querySelector('img[alt="thumbnail"]')?.getAttribute('src') === cardThumbnailSource(source) &&
+            document.querySelector('[data-testid="mock-player"]')?.dataset.thumbnailUrl === poster
+        )
+        const image = document.querySelector('img[alt="thumbnail"]')
+        check(image.dataset.unoptimized === String(!(visibility === 'public' && thumbnailKey)), 'incorrect studio image optimization')
+        check(image.getAttribute('sizes') === '153px', 'editor thumbnail needs its fixed display size')
+
+        root.render(
+          <TestProvider key={`cover-list:${++mount}`}>
+            <VideosSection />
+          </TestProvider>
+        )
+        await wait(() => document.querySelector('img')?.getAttribute('src') === cardThumbnailSource(source))
+        check(
+          document.querySelector('img').dataset.unoptimized === String(!(visibility === 'public' && thumbnailKey)),
+          'incorrect studio list image optimization'
+        )
+        await show()
+      }
     }
   })
   await test('deletion retry stays event-driven until the item disappears', async () => {

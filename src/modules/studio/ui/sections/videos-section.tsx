@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DEFAULT_LIMIT } from '@/constants'
 import { formatVideoStatus, formatVideoVisiblity } from '@/lib/utils'
+import { videoThumbnailSource } from '@/lib/video-image-source'
 import { VideoThumbnail } from '@/modules/videos/ui/components/video-thumbnail'
 import { trpc } from '@/trpc/client'
 
@@ -72,7 +73,7 @@ const VideosSectionSuspense = () => {
                         {!video.deletionRequestedAt && (
                           <Link prefetch href={`/studio/videos/${video.id}`}>
                             <VideoThumbnail
-                              imageUrl={video.thumbnailUrl}
+                              imageUrl={videoThumbnailSource(video)}
                               previewUrl={video.previewUrl}
                               title={video.title}
                               duration={video.duration || 0}
