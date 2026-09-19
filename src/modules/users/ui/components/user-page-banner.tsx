@@ -4,17 +4,12 @@ import Image from 'next/image'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { userGetOneOutput } from '@/modules/users/types'
 import { BannerUploadModal } from '@/modules/users/ui/components/banner-upload-modal'
 
 interface UserPageBannerProps {
   user: userGetOneOutput
-}
-
-export const UserPageBannerSkeleton = () => {
-  return <Skeleton className="h-[25vh] max-h-[200px] w-full rounded-xl" />
 }
 
 export const UserPageBanner = ({ user }: UserPageBannerProps) => {

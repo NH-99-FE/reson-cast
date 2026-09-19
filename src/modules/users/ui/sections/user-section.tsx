@@ -3,8 +3,9 @@ import { Suspense } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
 
 import { Separator } from '@/components/ui/separator'
-import { UserPageBanner, UserPageBannerSkeleton } from '@/modules/users/ui/components/user-page-banner'
-import { UserPageInfo, UserPageInfoSkeleton } from '@/modules/users/ui/components/user-page-info'
+import { UserPageBanner } from '@/modules/users/ui/components/user-page-banner'
+import { UserPageInfo } from '@/modules/users/ui/components/user-page-info'
+import { UserSectionSkeleton } from '@/modules/users/ui/components/user-page-skeleton'
 import { trpc } from '@/trpc/client'
 
 interface UserViewProps {
@@ -18,16 +19,6 @@ export const UserSection = (props: UserViewProps) => {
         <UserSectionSuspense {...props} />
       </ErrorBoundary>
     </Suspense>
-  )
-}
-
-const UserSectionSkeleton = () => {
-  return (
-    <div className="flex flex-col">
-      <UserPageBannerSkeleton />
-      <UserPageInfoSkeleton />
-      <Separator />
-    </div>
   )
 }
 

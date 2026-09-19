@@ -3,19 +3,23 @@ import { toast } from 'sonner'
 
 import { trpc } from '@/trpc/client'
 
+import { getSidebarSubscriptions, type SubscriptionAuthor } from '../lib/sidebar'
+
 interface UseSubscriptionProps {
-  userId: string
+  author: SubscriptionAuthor
   isSubscribed: boolean
   fromVideoId?: string
 }
 
-export const useSubscriptions = ({ userId, fromVideoId, isSubscribed }: UseSubscriptionProps) => {
+export const useSubscriptions = ({ author, fromVideoId, isSubscribed }: UseSubscriptionProps) => {
+  const userId = author.id
   const clerk = useClerk()
   const utils = trpc.useUtils()
 
   const optimisticallySetSubscription = async (subscribed: boolean) => {
     await Promise.all([
       utils.users.getOne.cancel({ id: userId }),
+      utils.subscriptions.getSidebar.cancel(),
       ...(fromVideoId ? [utils.videos.getOne.cancel({ id: fromVideoId })] : []),
     ])
     const previousUser = utils.users.getOne.getData({ id: userId })
@@ -49,12 +53,16 @@ export const useSubscriptions = ({ userId, fromVideoId, isSubscribed }: UseSubsc
       utils.videos.getManySubscribed.invalidate(),
       utils.users.getOne.invalidate({ id: userId }),
       utils.subscriptions.getMany.invalidate(),
+      utils.subscriptions.getSidebar.invalidate(),
     ])
 
   const subscribe = trpc.subscriptions.create.useMutation({
-    meta: { videoInteraction: fromVideoId },
+    meta: { videoInteraction: fromVideoId, subscriptionChange: { author, subscribed: true } },
     onMutate: () => optimisticallySetSubscription(true),
     onSuccess: () => {
+      // Keep the confirmed author even if the sidebar has never loaded.
+      // Reconciliation will fill the remaining entries when reads recover.
+      utils.subscriptions.getSidebar.setData(undefined, current => getSidebarSubscriptions(current ?? [], [{ author, subscribed: true }]))
       toast.success('关注成功')
     },
     onSettled: reconcile,
@@ -65,9 +73,13 @@ export const useSubscriptions = ({ userId, fromVideoId, isSubscribed }: UseSubsc
     },
   })
   const unsubscribe = trpc.subscriptions.remove.useMutation({
-    meta: { videoInteraction: fromVideoId },
+    meta: { videoInteraction: fromVideoId, subscriptionChange: { author, subscribed: false } },
     onMutate: () => optimisticallySetSubscription(false),
     onSuccess: () => {
+      utils.subscriptions.getSidebar.setData(
+        undefined,
+        current => current && getSidebarSubscriptions(current, [{ author, subscribed: false }])
+      )
       toast.success('取关成功')
     },
     onSettled: reconcile,

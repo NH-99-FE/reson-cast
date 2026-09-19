@@ -2,11 +2,12 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { ErrorBoundary } from 'react-error-boundary'
-import { toast } from 'sonner'
 
 import { InfiniteScroll } from '@/components/infinite-scroll'
 import { SubscriptionsSkeleton } from '@/components/page-content-skeletons'
 import { DEFAULT_LIMIT } from '@/constants'
+import { useSubscriptions } from '@/modules/subscriptions/hooks/use-subscription'
+import { type SubscriptionAuthor } from '@/modules/subscriptions/lib/sidebar'
 import { SubscriptionItem } from '@/modules/subscriptions/ui/components/subscription-item'
 import { trpc } from '@/trpc/client'
 
@@ -21,44 +22,37 @@ export const SubscriptionsSection = () => {
 }
 
 const SubscriptionsSectionSuspense = () => {
-  const utils = trpc.useUtils()
   const [subscriptions, query] = trpc.subscriptions.getMany.useSuspenseInfiniteQuery(
     { limit: DEFAULT_LIMIT },
     {
       getNextPageParam: lastPage => lastPage.nextCursor,
     }
   )
-  const unsubscribe = trpc.subscriptions.remove.useMutation({
-    onSuccess: data => {
-      toast.success('取关成功')
-      utils.videos.getManySubscribed.invalidate()
-      utils.users.getOne.invalidate({ id: data.creatorId })
-      utils.subscriptions.getMany.invalidate()
-    },
-    onError: () => {
-      toast.error('取关失败')
-    },
-  })
   return (
     <>
       <div className="flex flex-col gap-4">
         {subscriptions.pages
           .flatMap(page => page.items)
           .map(subscription => (
-            <Link prefetch key={subscription.creatorId} href={`/users/${subscription.user.id}`}>
-              <SubscriptionItem
-                name={subscription.user.name}
-                imageUrl={subscription.user.imageUrl}
-                subscriberCount={subscription.user.subscriberCount}
-                onUnsubscribe={() => {
-                  unsubscribe.mutate({ userId: subscription.creatorId })
-                }}
-                disabled={unsubscribe.isPending}
-              />
-            </Link>
+            <SubscribedAuthor key={subscription.creatorId} author={subscription.user} />
           ))}
       </div>
       <InfiniteScroll hasNextPage={query.hasNextPage} isFetchingNextPage={query.isFetchingNextPage} fetchNextPage={query.fetchNextPage} />
     </>
+  )
+}
+
+function SubscribedAuthor({ author }: { author: SubscriptionAuthor & { subscriberCount: number } }) {
+  const { onClick, isPending } = useSubscriptions({ author, isSubscribed: true })
+  return (
+    <Link prefetch href={`/users/${author.id}`}>
+      <SubscriptionItem
+        name={author.name}
+        imageUrl={author.imageUrl}
+        subscriberCount={author.subscriberCount}
+        onUnsubscribe={onClick}
+        disabled={isPending}
+      />
+    </Link>
   )
 }

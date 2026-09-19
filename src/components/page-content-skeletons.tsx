@@ -22,7 +22,7 @@ const VideoInfoSkeleton = () => {
   )
 }
 
-const VideoGridCardSkeleton = () => {
+export const VideoGridCardSkeleton = () => {
   return (
     <div className="flex w-full flex-col gap-2">
       <VideoThumbnailSkeleton />

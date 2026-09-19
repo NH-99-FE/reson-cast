@@ -12,6 +12,9 @@ const files = [
   'components/page-content-skeletons.tsx',
   'components/ui/table.tsx',
   'components/ui/skeleton.tsx',
+  'components/ui/separator.tsx',
+  'modules/users/ui/components/user-page-layout.tsx',
+  'modules/users/ui/components/user-page-skeleton.tsx',
   'lib/utils.ts',
 ]
 for (const file of files) {
@@ -61,7 +64,7 @@ export function Links() {
   const [ready, setReady] = useState(false)
   useEffect(() => setReady(true), [])
   return <nav data-ready={ready}>
-    {[['/', '主页'], ['/feed/trending', '热门'], ['/playlists/history', '历史记录'], ['/prefetched', '预取页面']].map(([href, label]) =>
+    {[['/', '主页'], ['/feed/trending', '热门'], ['/playlists/history', '历史记录'], ['/prefetched', '预取页面'], ['/users/creator-1', '订阅作者一'], ['/users/creator-2', '订阅作者二']].map(([href, label]) =>
       <SidebarNavigationLink key={href} href={href} aria-current={pathname === href ? 'page' : undefined}>{label}</SidebarNavigationLink>)}
     <SidebarNavigationLink href="/feed/trending" target="_blank">新标签页</SidebarNavigationLink>
     <SidebarNavigationLink href="/playlists/liked" onClick={event => event.preventDefault()}>需要登录</SidebarNavigationLink>
@@ -103,6 +106,35 @@ export default async function Page() {
     <div><h1 className="text-2xl font-bold">热点</h1><p className="text-xs text-muted-foreground">当前最受欢迎的视频</p></div>
     <Suspense fallback={<VideoGridSkeleton />}><Content /></Suspense>
   </div>
+}
+`
+)
+await mkdir(join(fixture, 'src/app/users/[userId]'), { recursive: true })
+await cp(resolve('src/app/(home)/users/[userId]/loading.tsx'), join(fixture, 'src/app/users/[userId]/loading.tsx'))
+// Reproduce the inherited home fallback so the user-specific boundary must win.
+await cp(resolve('src/app/(home)/loading.tsx'), join(fixture, 'src/app/loading.tsx'))
+await writeFile(
+  join(fixture, 'src/app/users/[userId]/page.jsx'),
+  `
+export const dynamic = 'force-dynamic'
+import { Suspense } from 'react'
+import { UserPageLayout } from '@/modules/users/ui/components/user-page-layout'
+import { UserSectionSkeleton, UserVideosSkeleton } from '@/modules/users/ui/components/user-page-skeleton'
+async function Profile({ userId }) {
+  await new Promise(resolve => setTimeout(resolve, 2500))
+  return <h1>作者：{userId}</h1>
+}
+async function Videos({ userId }) {
+  await new Promise(resolve => setTimeout(resolve, 3000))
+  return <h2>作者视频：{userId}</h2>
+}
+export default async function Page({ params }) {
+  const { userId } = await params
+  await new Promise(resolve => setTimeout(resolve, 1500))
+  return <UserPageLayout data-stage="user-data-loading">
+    <Suspense fallback={<UserSectionSkeleton />}><Profile userId={userId} /></Suspense>
+    <Suspense fallback={<UserVideosSkeleton />}><Videos userId={userId} /></Suspense>
+  </UserPageLayout>
 }
 `
 )

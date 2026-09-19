@@ -16,7 +16,7 @@ interface VideoOwnerProps {
 
 export const VideoOwner = ({ user, videoId }: VideoOwnerProps) => {
   const { userId: userClerkId, isLoaded } = useAuth()
-  const { onClick, isPending } = useSubscriptions({ userId: user.id, fromVideoId: videoId, isSubscribed: user.viewerSubscribed })
+  const { onClick, isPending } = useSubscriptions({ author: user, fromVideoId: videoId, isSubscribed: user.viewerSubscribed })
   return (
     <div className="flex min-w-0 items-center justify-between gap-3 sm:items-start sm:justify-start">
       <Link prefetch href={`/users/${user.id}`}>

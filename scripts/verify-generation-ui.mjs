@@ -1,4 +1,5 @@
 // Isolated real-form browser harness: no credentials or external service requests.
+import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
@@ -74,7 +75,13 @@ const realtime = await build({
   ],
 })
 const interactionsClient = resolve('tests/browser/interactions-client.jsx')
+const { default: tailwind } = await import('@tailwindcss/postcss')
+const postcss = createRequire(require.resolve('@tailwindcss/postcss'))('postcss')
+const interactionStyles = await postcss([tailwind()]).process(await readFile('src/app/globals.css', 'utf8'), {
+  from: resolve('src/app/globals.css'),
+})
 const interactions = await build({
+  outfile: 'interactions.js',
   entryPoints: ['tests/browser/interactions-ui.jsx'],
   bundle: true,
   write: false,
@@ -89,17 +96,22 @@ const interactions = await build({
       name: 'interaction-boundaries',
       setup(build) {
         build.onResolve({ filter: /^@\/trpc\/client$/ }, () => ({ path: interactionsClient }))
-        build.onResolve({ filter: /^next\/(link|image)$/ }, args => ({ path: args.path, namespace: 'stub' }))
+        build.onResolve({ filter: /^next\/(link|image|navigation)$/ }, args => ({ path: args.path, namespace: 'stub' }))
         build.onLoad({ filter: /.*/, namespace: 'stub' }, args => ({
-          contents: stubs[args.path],
+          contents:
+            args.path === 'next/link'
+              ? stubs[args.path] + '; export const useLinkStatus = () => ({pending: false});'
+              : args.path === 'next/navigation'
+                ? 'export const usePathname = () => window.location.pathname;'
+                : stubs[args.path],
           loader: 'jsx',
           resolveDir: process.cwd(),
         }))
         build.onResolve({ filter: /^@clerk\/nextjs$/ }, () => ({ path: 'clerk', namespace: 'interaction-stub' }))
         build.onLoad({ filter: /.*/, namespace: 'interaction-stub' }, () => ({
-          contents:
-            'export const useClerk = () => ({openSignIn() {}}); export const useAuth = () => ({ userId: "viewer", isLoaded: true });',
+          contents: `import { state } from ${JSON.stringify(interactionsClient)}; export const useClerk = () => ({openSignIn() {}}); export const useAuth = () => ({ userId: state.signedIn ? 'viewer' : null, isLoaded: true, isSignedIn: state.signedIn });`,
           loader: 'js',
+          resolveDir: process.cwd(),
         }))
       },
     },
@@ -170,14 +182,21 @@ createServer((request, response) => {
     response.end('<!doctype html><html><body><div id="root"></div><script src="/generation-action.js"></script></body></html>')
     return
   }
-  if (request.url === '/interactions.js') {
-    response.setHeader('content-type', 'text/javascript')
-    response.end(interactions.outputFiles[0].contents)
+  if (request.url === '/interactions.css') {
+    response.setHeader('content-type', 'text/css')
+    response.end(interactionStyles.css + '\n' + interactions.outputFiles.find(file => file.path.endsWith('.css')).text)
     return
   }
-  if (request.url === '/interactions') {
+  if (request.url === '/interactions.js') {
+    response.setHeader('content-type', 'text/javascript')
+    response.end(interactions.outputFiles.find(file => file.path.endsWith('.js')).contents)
+    return
+  }
+  if (request.url?.split('?')[0] === '/interactions') {
     response.setHeader('content-type', 'text/html; charset=utf-8')
-    response.end('<!doctype html><html><body><div id="root"></div><script src="/interactions.js"></script></body></html>')
+    response.end(
+      '<!doctype html><html><head><link rel="stylesheet" href="/interactions.css"></head><body><div id="root"></div><script src="/interactions.js"></script></body></html>'
+    )
     return
   }
   if (request.url === '/app.js') {

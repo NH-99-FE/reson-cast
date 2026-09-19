@@ -6,7 +6,18 @@ import { db } from '@/db'
 import { subscriptions, users } from '@/db/schema'
 import { createTRPCRouter, protectedProcedure } from '@/trpc/init'
 
+import { SIDEBAR_SUBSCRIPTIONS_LIMIT } from '../lib/sidebar'
+
 export const subscriptionsRouter = createTRPCRouter({
+  getSidebar: protectedProcedure.query(async ({ ctx }) => {
+    return db
+      .select({ id: users.id, name: users.name, imageUrl: users.imageUrl })
+      .from(subscriptions)
+      .innerJoin(users, eq(subscriptions.creatorId, users.id))
+      .where(eq(subscriptions.viewerId, ctx.user.id))
+      .orderBy(desc(subscriptions.updatedAt), desc(subscriptions.creatorId))
+      .limit(SIDEBAR_SUBSCRIPTIONS_LIMIT)
+  }),
   getMany: protectedProcedure
     .input(
       z.object({

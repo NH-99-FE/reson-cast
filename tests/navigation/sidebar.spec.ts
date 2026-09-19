@@ -165,3 +165,70 @@ test('production prefetch and data loading keep one matching skeleton', async ({
   await expect(page.locator('main [data-slot="skeleton"]')).toHaveCount(0)
   expect(errors).toEqual([])
 })
+
+for (const viewport of [
+  { width: 1280, height: 900 },
+  { width: 390, height: 844 },
+]) {
+  test(`author navigation shares the route and data skeleton at ${viewport.width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport)
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    const prefetched = ['creator-1', 'creator-2'].map(id =>
+      page.waitForResponse(
+        response =>
+          new URL(response.url()).pathname === `/users/${id}` &&
+          response.request().headers()['next-router-prefetch'] === '1' &&
+          !response.request().headers()['next-router-segment-prefetch']
+      )
+    )
+    await page.goto('/')
+    await expect(page.locator('nav')).toHaveAttribute('data-ready', 'true')
+    await Promise.all(prefetched)
+    await page.waitForLoadState('networkidle')
+    const skeletons = page.locator('main [data-slot="skeleton"]')
+    const boxes = () =>
+      skeletons.evaluateAll(nodes =>
+        nodes.map(node => {
+          const { x, y, width, height } = node.getBoundingClientRect()
+          return { x, y, width, height }
+        })
+      )
+    for (const [id, label] of [
+      ['creator-1', '订阅作者一'],
+      ['creator-2', '订阅作者二'],
+    ]) {
+      let release!: () => void
+      const gate = new Promise<void>(resolve => {
+        release = resolve
+      })
+      const pattern = `**/users/${id}*`
+      await page.route(pattern, async route => {
+        if (route.request().headers().rsc === '1') await gate
+        await route.continue()
+      })
+      let routeBoxes: unknown
+      try {
+        await page.getByRole('link', { name: label, exact: true }).click()
+        await expect(page.getByRole('status', { name: '正在加载用户主页', exact: true })).toBeVisible({ timeout: 1000 })
+        await expect(page.getByRole('status', { name: '正在加载主页', exact: true })).toHaveCount(0)
+        await expect(skeletons).toHaveCount(101)
+        routeBoxes = await boxes()
+        if (id === 'creator-1') await page.screenshot({ path: testInfo.outputPath(`author-loading-${viewport.width}.png`) })
+        else await expect(page.getByRole('heading', { name: '作者：creator-1', exact: true })).toHaveCount(0)
+      } finally {
+        release()
+      }
+      await expect(page.locator('[data-stage="user-data-loading"]')).toBeVisible()
+      await expect(page.getByRole('status', { name: '正在加载用户主页', exact: true })).toHaveCount(0)
+      await expect(skeletons).toHaveCount(101)
+      expect(await boxes()).toEqual(routeBoxes)
+      await expect(page.getByRole('heading', { name: `作者：${id}`, exact: true })).toBeVisible()
+      await expect(page.getByRole('heading', { name: `作者视频：${id}`, exact: true })).toBeVisible()
+      await expect(skeletons).toHaveCount(0)
+      await expect(page).toHaveURL(`/users/${id}`)
+      await page.unroute(pattern)
+    }
+    expect(errors).toEqual([])
+  })
+}

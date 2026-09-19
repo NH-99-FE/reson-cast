@@ -4,7 +4,9 @@ import { ErrorBoundary } from 'react-error-boundary'
 
 import { InfiniteScroll } from '@/components/infinite-scroll'
 import { DEFAULT_LIMIT } from '@/constants'
-import { VideoGridCard, VideoGridCardSkeleton } from '@/modules/videos/ui/components/video-grid-card'
+import { USER_VIDEOS_GRID_CLASS_NAME } from '@/modules/users/ui/components/user-page-layout'
+import { UserVideosSkeleton } from '@/modules/users/ui/components/user-page-skeleton'
+import { VideoGridCard } from '@/modules/videos/ui/components/video-grid-card'
 import { trpc } from '@/trpc/client'
 
 interface VideosSectionProps {
@@ -13,21 +15,11 @@ interface VideosSectionProps {
 
 export const VideosSection = (props: VideosSectionProps) => {
   return (
-    <Suspense fallback={<VideosSectionSkeleton />}>
+    <Suspense fallback={<UserVideosSkeleton />}>
       <ErrorBoundary fallback={<p>出错了</p>}>
         <VideosSectionSuspense {...props} />
       </ErrorBoundary>
     </Suspense>
-  )
-}
-
-const VideosSectionSkeleton = () => {
-  return (
-    <div className="grid grid-cols-1 gap-4 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-      {Array.from({ length: 18 }).map((_, index) => (
-        <VideoGridCardSkeleton key={index} />
-      ))}
-    </div>
   )
 }
 
@@ -40,7 +32,7 @@ export const VideosSectionSuspense = ({ userId }: VideosSectionProps) => {
   )
   return (
     <div>
-      <div className="grid grid-cols-1 gap-4 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+      <div className={USER_VIDEOS_GRID_CLASS_NAME}>
         {videos.pages
           .flatMap(page => page.items)
           .map(video => (
