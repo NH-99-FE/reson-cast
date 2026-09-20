@@ -4,10 +4,12 @@ import { after } from 'next/server'
 import { db } from '@/db'
 import { videos } from '@/db/schema'
 import { mux } from '@/lib/mux'
+import { readyMuxSubtitle } from '@/lib/mux-subtitles'
 import { wakeOutbox } from '@/lib/realtime/server'
 import { isMissing } from '@/lib/video-cleanup'
 import { imagePath } from '@/lib/video-media'
 import { requestVideoDeletion } from '@/modules/videos/server/services/deletion'
+import { syncMuxSubtitle } from '@/modules/videos/server/services/subtitles'
 
 async function handleWebhook(request: Request) {
   const secret = process.env.MUX_WEBHOOK_SECRET
@@ -29,12 +31,11 @@ async function handleWebhook(request: Request) {
     return new Response('OK')
   }
   if (event.type === 'video.asset.track.ready') {
+    if (!readyMuxSubtitle([event.data]).muxTrackId) return new Response('OK')
     const assetId = (event.data as typeof event.data & { asset_id?: string }).asset_id
     if (!assetId) return new Response('Missing asset ID', { status: 400 })
-    await db
-      .update(videos)
-      .set({ muxTrackId: event.data.id, muxTrackStatus: event.data.status })
-      .where(and(eq(videos.muxAssetId, assetId), isNull(videos.deletionRequestedAt)))
+    const result = await syncMuxSubtitle(assetId)
+    if (result === 'retry') return new Response('Video association is not ready', { status: 503 })
     return new Response('OK')
   }
   if (!['video.asset.created', 'video.asset.ready', 'video.asset.errored'].includes(event.type)) return new Response('OK')
@@ -61,6 +62,7 @@ async function handleWebhook(request: Request) {
     .set({
       muxAssetId: asset.id,
       muxStatus: asset.status,
+      ...readyMuxSubtitle(asset.tracks),
       // A visibility change can rotate the ID concurrently: only initialize it here.
       ...(video.muxPlaybackId ? {} : { muxPlaybackId: playbackId }),
       duration: Math.round((asset.duration ?? 0) * 1000),

@@ -21,6 +21,8 @@ const { startVideoGeneration, retryVideoGeneration, beginGeneration, finishTextG
   await import('../src/modules/videos/server/services/generation')
 const { restoreVideoThumbnail, cleanupVideoFiles, pendingFileCleanup } = await import('../src/modules/videos/server/services/thumbnails')
 const { updateVideo, resumePlaybackRevocation } = await import('../src/modules/videos/server/services/update')
+const { syncMuxSubtitle } = await import('../src/modules/videos/server/services/subtitles')
+const { readyMuxSubtitle } = await import('../src/lib/mux-subtitles')
 const { generationCleanupPolicy, runGenerationCleanup } = await import('../src/modules/videos/server/services/generation-cleanup')
 const pg = new PGlite()
 const owner = '00000000-0000-4000-8000-000000000001'
@@ -56,6 +58,81 @@ async function reset() {
     [videoId, owner]
   )
 }
+
+const readySubtitle = { id: 'english-caption', type: 'text', text_source: 'generated_vod', language_code: 'en', status: 'ready' } as const
+
+test('subtitle arriving before the asset callback is associated through upload ID; duplicates are safe', async () => {
+  await reset()
+  await pg.query('UPDATE videos SET mux_asset_id=NULL, mux_upload_id=$1, mux_track_id=NULL', ['upload'])
+  const retrieve = mock.method(mux.video.assets, 'retrieve', async () => ({ id: 'asset', upload_id: 'upload', tracks: [readySubtitle] }))
+  try {
+    assert.equal(await syncMuxSubtitle('asset'), 'synced')
+    assert.equal(await syncMuxSubtitle('asset'), 'synced')
+    const { rows } = await pg.query<{ mux_track_id: string | null; muxTrack_status: string | null; mux_asset_id: string | null }>(
+      'SELECT mux_track_id, "muxTrack_status", mux_asset_id FROM videos WHERE id=$1',
+      [videoId]
+    )
+    assert.equal(rows[0].mux_track_id, readySubtitle.id)
+    assert.equal(rows[0].muxTrack_status, 'ready')
+    assert.equal(rows[0].mux_asset_id, null, 'does not depend on or replace asset synchronization')
+  } finally {
+    retrieve.mock.restore()
+  }
+})
+
+test('unassociated subtitles request a retry, while deleted videos are left untouched', async () => {
+  await reset()
+  const retrieve = mock.method(mux.video.assets, 'retrieve', async () => ({ id: 'asset', upload_id: 'upload', tracks: [readySubtitle] }))
+  try {
+    await pg.query('UPDATE videos SET mux_asset_id=NULL, mux_track_id=NULL')
+    assert.equal(await syncMuxSubtitle('asset'), 'retry')
+    await pg.query('UPDATE videos SET mux_upload_id=$1, deletion_requested_at=now()', ['upload'])
+    assert.equal(await syncMuxSubtitle('asset'), 'ignored')
+    const { rows } = await pg.query<{ mux_track_id: string | null }>('SELECT mux_track_id FROM videos')
+    assert.equal(rows[0].mux_track_id, null)
+  } finally {
+    retrieve.mock.restore()
+  }
+})
+
+test('deleted Mux assets are acknowledged, but transient Mux errors remain retryable', async () => {
+  let status = 404
+  const retrieve = mock.method(mux.video.assets, 'retrieve', async () => {
+    throw Object.assign(new Error('Mux failed'), { status })
+  })
+  try {
+    assert.equal(await syncMuxSubtitle('asset'), 'ignored')
+    status = 503
+    await assert.rejects(syncMuxSubtitle('asset'), /Mux failed/)
+  } finally {
+    retrieve.mock.restore()
+  }
+})
+
+test('asset reconciliation selects the ready English automatic caption and does not downgrade it', () => {
+  const patch = readyMuxSubtitle([
+    { id: 'audio', type: 'audio' },
+    { ...readySubtitle, id: 'french', language_code: 'fr' },
+    { ...readySubtitle, id: 'uploaded', text_source: 'uploaded' },
+    { ...readySubtitle, id: 'pending', status: 'preparing' },
+    readySubtitle,
+  ])
+  assert.deepEqual(patch, { muxTrackId: readySubtitle.id, muxTrackStatus: 'ready' })
+  assert.deepEqual({ ...patch, ...readyMuxSubtitle([{ ...readySubtitle, status: 'preparing' }]) }, patch)
+  assert.deepEqual(readyMuxSubtitle(undefined), {})
+})
+
+test('subtitle ready callback retries when the current asset snapshot has not caught up', async () => {
+  const retrieve = mock.method(mux.video.assets, 'retrieve', async () => ({
+    id: 'asset',
+    tracks: [{ ...readySubtitle, status: 'preparing' }],
+  }))
+  try {
+    assert.equal(await syncMuxSubtitle('asset'), 'retry')
+  } finally {
+    retrieve.mock.restore()
+  }
+})
 
 test('dispatch failure remains discoverable and retries the same job through successful writeback', async () => {
   await reset()

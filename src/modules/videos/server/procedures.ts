@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { db } from '@/db'
 import { subscriptions, users, videoReactions, videos, videoUpdateSchema, videoViews } from '@/db/schema'
 import { mux } from '@/lib/mux'
+import { readyMuxSubtitle } from '@/lib/mux-subtitles'
 import { imagePath, muxToken } from '@/lib/video-media'
 import { publicVideoCondition, readableVideoCondition, requireVideo, viewerId } from '@/modules/videos/server/services/access'
 import { requestVideoDeletion } from '@/modules/videos/server/services/deletion'
@@ -313,6 +314,7 @@ export const videosRouter = createTRPCRouter({
       .update(videos)
       .set({
         muxStatus: asset.status,
+        ...readyMuxSubtitle(asset.tracks),
         muxPlaybackId: playBackId,
         muxAssetId: asset.id,
         duration,
