@@ -7,14 +7,30 @@ interface ResponsiveModalProps {
   open: boolean
   title: string
   onOpenChange?: (open: boolean) => void
+  variant?: 'responsive' | 'dialog'
+  preventOutsideClose?: boolean
+  onEscapeKeyDown?: (event: KeyboardEvent) => void
 }
 
-export const ResponsiveModal = ({ children, onOpenChange, open, title }: ResponsiveModalProps) => {
+export const ResponsiveModal = ({
+  children,
+  onOpenChange,
+  open,
+  title,
+  preventOutsideClose,
+  onEscapeKeyDown,
+  variant = 'responsive',
+}: ResponsiveModalProps) => {
   const IsMobile = useIsMobile()
-  if (IsMobile) {
+  if (IsMobile && variant !== 'dialog') {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent>
+        <DrawerContent
+          onInteractOutside={event => {
+            if (preventOutsideClose) event.preventDefault()
+          }}
+          onEscapeKeyDown={onEscapeKeyDown}
+        >
           <DrawerHeader>
             <DrawerTitle>{title}</DrawerTitle>
           </DrawerHeader>
@@ -25,7 +41,12 @@ export const ResponsiveModal = ({ children, onOpenChange, open, title }: Respons
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent
+        onInteractOutside={event => {
+          if (preventOutsideClose) event.preventDefault()
+        }}
+        onEscapeKeyDown={onEscapeKeyDown}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

@@ -1,9 +1,9 @@
 'use client'
 
 import type { MuxUploaderRefAttributes } from '@mux/mux-uploader-react'
-import { Loader2Icon, PlusIcon } from 'lucide-react'
+import { CircleAlertIcon, Loader2Icon, PlusIcon } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useRef, useState } from 'react'
+import { type ComponentPropsWithoutRef, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { ResponsiveModal } from '@/components/responsive-modal'
@@ -14,10 +14,25 @@ import { StudioUploader } from './studio-uploader'
 
 type UploadPhase = 'idle' | 'creating' | 'ready' | 'uploading' | 'cancelling' | 'cancel-failed'
 
+// Keep inactive content mounted so switching panels never interrupts the upload.
+const UploadPanel = ({ active, children, ...props }: ComponentPropsWithoutRef<'div'> & { active: boolean }) => (
+  <div
+    {...props}
+    aria-hidden={!active}
+    inert={!active}
+    className={`grid transition-[grid-template-rows,opacity] duration-200 ease-in-out motion-reduce:transition-none ${active ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+  >
+    <div className="min-h-0 overflow-hidden">{children}</div>
+  </div>
+)
+
 const StudioUploadModal = () => {
   const router = useRouter()
   const utils = trpc.useUtils()
+  const uploadPanel = useRef<HTMLDivElement>(null)
+  const continueButton = useRef<HTMLButtonElement>(null)
   const uploader = useRef<MuxUploaderRefAttributes>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [phase, setPhase] = useState<UploadPhase>('idle')
   const phaseRef = useRef<UploadPhase>('idle')
   const transition = (next: UploadPhase) => {
@@ -52,16 +67,25 @@ const StudioUploadModal = () => {
   const onSuccess = () => {
     if (!['ready', 'uploading'].includes(phaseRef.current) || !create.data?.video.id) return
     const id = create.data.video.id
+    setConfirmOpen(false)
     transition('idle')
     create.reset()
     router.push(`/studio/videos/${id}`)
   }
   const cancel = () => {
     if (!create.data || !['ready', 'uploading', 'cancel-failed'].includes(phaseRef.current)) return
-    if (phaseRef.current === 'uploading' && !window.confirm('是否放弃本次上传？放弃后将删除本次视频记录。')) return
+    setConfirmOpen(false)
     transition('cancelling')
     uploader.current?.upload?.abort()
     remove.mutate({ id: create.data.video.id })
+  }
+  const showConfirmation = () => {
+    setConfirmOpen(true)
+    requestAnimationFrame(() => continueButton.current?.focus({ preventScroll: true }))
+  }
+  const resume = () => {
+    setConfirmOpen(false)
+    requestAnimationFrame(() => uploadPanel.current?.focus({ preventScroll: true }))
   }
   const start = () => {
     if (phaseRef.current !== 'idle') return
@@ -71,30 +95,84 @@ const StudioUploadModal = () => {
   return (
     <>
       <ResponsiveModal
-        title="上传视频"
+        variant="dialog"
+        title={confirmOpen ? '放弃上传？' : '上传视频'}
+        preventOutsideClose={phase === 'uploading' || phase === 'cancelling' || phase === 'cancel-failed'}
+        onEscapeKeyDown={event => {
+          if (confirmOpen) {
+            event.preventDefault()
+            resume()
+          }
+        }}
         open={phase !== 'idle' && phase !== 'creating'}
         onOpenChange={open => {
-          if (!open) cancel()
+          if (open) return
+          if (confirmOpen) {
+            resume()
+            return
+          }
+          if (phaseRef.current === 'uploading') showConfirmation()
+          else cancel()
         }}
       >
         {phase === 'cancelling' || phase === 'cancel-failed' ? (
-          <div className="space-y-3" role="status">
-            <p>{phase === 'cancelling' ? '正在取消上传…' : '上传已停止，取消请求尚未确认。请重试。'}</p>
-            <Button onClick={cancel} disabled={phase === 'cancelling'}>
-              重试取消
-            </Button>
+          <div className="flex flex-col items-center gap-4 px-4 py-8 text-center" role="status" aria-live="polite">
+            <div
+              className={`flex size-12 items-center justify-center rounded-full ${phase === 'cancelling' ? 'bg-muted' : 'bg-destructive/10 text-destructive'}`}
+            >
+              {phase === 'cancelling' ? (
+                <Loader2Icon className="size-5 animate-spin text-muted-foreground" aria-hidden="true" />
+              ) : (
+                <CircleAlertIcon className="size-5" aria-hidden="true" />
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">{phase === 'cancelling' ? '正在取消上传' : '取消未完成'}</p>
+              <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
+                {phase === 'cancelling' ? '正在提交取消请求，请稍候。' : '上传已停止，但取消请求未能确认，请重试。'}
+              </p>
+            </div>
+            {phase === 'cancel-failed' && (
+              <Button variant="outline" onClick={cancel} className="mt-1">
+                重试取消
+              </Button>
+            )}
           </div>
-        ) : create.data?.url ? (
-          <StudioUploader
-            uploaderRef={uploader}
-            endpoint={create.data.url}
-            onSuccess={onSuccess}
-            onStarted={() => {
-              if (phaseRef.current === 'ready') transition('uploading')
-            }}
-          />
         ) : (
-          <Loader2Icon />
+          <div>
+            <UploadPanel active={!confirmOpen} data-upload-progress-panel>
+              <div ref={uploadPanel} tabIndex={-1} className="outline-none">
+                {create.data?.url ? (
+                  <StudioUploader
+                    uploaderRef={uploader}
+                    endpoint={create.data.url}
+                    onSuccess={onSuccess}
+                    onStarted={() => {
+                      if (phaseRef.current === 'ready') transition('uploading')
+                    }}
+                  />
+                ) : (
+                  <Loader2Icon />
+                )}
+              </div>
+            </UploadPanel>
+            <UploadPanel active={confirmOpen} data-upload-confirmation>
+              <section aria-label="放弃本次上传" className="pt-1">
+                <p className="flex items-center gap-2 text-sm leading-relaxed text-muted-foreground">
+                  <CircleAlertIcon className="size-4 shrink-0" aria-hidden="true" />
+                  <span>上传将停止，本次视频记录将被删除。</span>
+                </p>
+                <div className="mt-6 flex justify-end gap-3 pb-1">
+                  <Button ref={continueButton} variant="outline" onClick={resume}>
+                    继续上传
+                  </Button>
+                  <Button variant="destructive" onClick={cancel}>
+                    放弃上传
+                  </Button>
+                </div>
+              </section>
+            </UploadPanel>
+          </div>
         )}
       </ResponsiveModal>
       <Button variant="secondary" onClick={start} disabled={phase !== 'idle'}>
