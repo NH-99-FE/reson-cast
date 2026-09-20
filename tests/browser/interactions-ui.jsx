@@ -1,14 +1,37 @@
+import { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { Sidebar, SidebarContent, SidebarProvider } from '../../src/components/ui/sidebar'
 import { DEFAULT_LIMIT } from '../../src/constants'
 import { CommentItem } from '../../src/modules/comments/ui/components/comment-item'
 import { SubscriptionsSection as SidebarSubscriptions } from '../../src/modules/home/ui/components/home-siderbar/subscriptions-section'
+import { PlaylistCreateModal } from '../../src/modules/playlists/ui/components/playlist-create-modal'
+import { PlaylistHeaderSection } from '../../src/modules/playlists/ui/components/playlist-header-section'
 import { useSubscriptions } from '../../src/modules/subscriptions/hooks/use-subscription'
 import { SubscriptionButton } from '../../src/modules/subscriptions/ui/components/subscription-button'
 import { SubscriptionsSection as FullSubscriptions } from '../../src/modules/subscriptions/ui/sections/subscriptions-section'
+import { VideoMenu } from '../../src/modules/videos/ui/components/video-menu'
 import { VideoReactions } from '../../src/modules/videos/ui/components/video-reactions'
 import { Provider, trpc } from './interactions-client'
+
+function PlaylistControls() {
+  const [open, setOpen] = useState(false)
+  const { data } = trpc.playlists.getVideos.useInfiniteQuery(
+    { playlistId: 'playlist', limit: DEFAULT_LIMIT },
+    { getNextPageParam: page => page.nextCursor }
+  )
+  return (
+    <>
+      <VideoMenu videoId="video" />
+      <button onClick={() => setOpen(true)}>新建</button>
+      <PlaylistCreateModal open={open} onOpenChange={setOpen} />
+      <div data-testid="playlist-header">
+        <PlaylistHeaderSection playlistId="playlist" />
+      </div>
+      <span data-testid="playlist-videos">{data?.pages.flatMap(page => page.items).length ?? 0}</span>
+    </>
+  )
+}
 
 function Controls() {
   const comments = trpc.comments.getMany.useInfiniteQuery(
@@ -47,7 +70,15 @@ createRoot(document.getElementById('root')).render(
           <SidebarSubscriptions />
         </SidebarContent>
       </Sidebar>
-      <main className="flex-1 p-8">{new URLSearchParams(window.location.search).has('full') ? <FullSubscriptions /> : <Controls />}</main>
+      <main className="flex-1 p-8">
+        {new URLSearchParams(window.location.search).has('playlist') ? (
+          <PlaylistControls />
+        ) : new URLSearchParams(window.location.search).has('full') ? (
+          <FullSubscriptions />
+        ) : (
+          <Controls />
+        )}
+      </main>
     </SidebarProvider>
   </Provider>
 )

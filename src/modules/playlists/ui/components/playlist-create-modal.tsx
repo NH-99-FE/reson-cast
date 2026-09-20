@@ -31,6 +31,7 @@ export const PlaylistCreateModal = ({ onOpenChange, open }: PlaylistCreateModalP
   const create = trpc.playlists.create.useMutation({
     onSuccess: () => {
       utils.playlists.getMany.invalidate()
+      utils.playlists.getManyForVideo.invalidate()
       toast.success('创建成功')
       onOpenChange(false)
       form.reset()

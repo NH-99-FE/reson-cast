@@ -13,6 +13,12 @@ const author = id => ({
     'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="16" height="16"%3E%3Crect width="16" height="16" fill="%2394a3b8"/%3E%3C/svg%3E',
 })
 export const state = {
+  playlistEmpty: new URLSearchParams(window.location.search).get('playlist') === 'empty',
+  playlistFail: new URLSearchParams(window.location.search).get('playlist') === 'fail',
+  playlistReads: 0,
+  playlistContains: false,
+  holdPlaylist: false,
+  releasePlaylist: null,
   authors: scenario === 'empty' ? [] : Array.from({ length: 8 }, (_, i) => author(String(i + 1))),
   sidebarFail: scenario === 'fail',
   holdSidebar: scenario === 'slow',
@@ -31,6 +37,38 @@ export const state = {
 }
 window.interactions = state
 const handle = async ({ path, input }) => {
+  if (path === 'playlists.getManyForVideo') {
+    state.playlistReads++
+    if (state.holdPlaylist)
+      await new Promise(resolve => {
+        state.releasePlaylist = resolve
+      })
+    if (state.playlistFail) throw new Error('Playlist read failed')
+    return {
+      items: state.playlistEmpty ? [] : [{ id: 'playlist', name: '测试列表', containsVideo: state.playlistContains }],
+      nextCursor: null,
+    }
+  }
+  if (path === 'playlists.getVideos') return { items: state.playlistContains ? [{ id: 'video' }] : [], nextCursor: null }
+  if (path === 'playlists.getOne') return { id: input.id, name: '测试列表' }
+  if (path === 'playlists.remove') {
+    if (state.fail) throw new Error('Playlist deletion failed')
+    state.playlistEmpty = true
+    return { id: input.id }
+  }
+  if (path === 'playlists.create') {
+    state.playlistEmpty = false
+    return { id: 'playlist', name: input.name }
+  }
+  if (path === 'playlists.addVideo' || path === 'playlists.removeVideo') {
+    state.writes++
+    await new Promise(resolve => {
+      state.release = resolve
+    })
+    if (state.fail) throw new Error('Playlist write failed')
+    state.playlistContains = path === 'playlists.addVideo'
+    return input
+  }
   if (path === 'comments.getMany')
     return {
       items: ['first', 'second'].map(id => ({

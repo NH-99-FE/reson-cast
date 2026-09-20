@@ -54,6 +54,7 @@ const PlaylistHeaderSectionSuspense = ({ playlistId }: PlaylistHeaderSectionProp
     onSuccess: () => {
       toast.success('删除成功')
       utils.playlists.getMany.invalidate()
+      utils.playlists.getManyForVideo.invalidate()
       router.push('/playlists')
     },
     onError: () => {

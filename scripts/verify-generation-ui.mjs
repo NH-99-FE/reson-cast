@@ -102,7 +102,7 @@ const interactions = await build({
             args.path === 'next/link'
               ? stubs[args.path] + '; export const useLinkStatus = () => ({pending: false});'
               : args.path === 'next/navigation'
-                ? 'export const usePathname = () => window.location.pathname;'
+                ? 'export const usePathname = () => window.location.pathname; export const useRouter = () => ({ push() {} });'
                 : stubs[args.path],
           loader: 'jsx',
           resolveDir: process.cwd(),

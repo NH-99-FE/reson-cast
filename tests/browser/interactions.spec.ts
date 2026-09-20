@@ -1,21 +1,5 @@
 import { expect, test } from '@playwright/test'
 
-declare global {
-  interface Window {
-    interactions: {
-      sidebarFail: boolean
-      holdSidebar: boolean
-      releaseSidebar: (() => void) | null
-      sidebarReads: number
-      fail: boolean
-      release: (() => void) | null
-      writes: number
-      pendingComments: Record<string, (fail: boolean) => void>
-      pendingWrites: Record<string, () => void>
-    }
-  }
-}
-
 const pageErrors = new WeakMap<import('@playwright/test').Page, string[]>()
 test.beforeEach(async ({ page }) => {
   const errors: string[] = []
