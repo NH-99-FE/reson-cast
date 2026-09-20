@@ -151,7 +151,40 @@ const recoveryExample = await build({
   format: 'iife',
   define: { 'process.env.NODE_ENV': '"development"' },
 })
+const upload = await build({
+  entryPoints: ['tests/browser/upload-ui.jsx'],
+  bundle: true,
+  write: false,
+  jsx: 'automatic',
+  format: 'iife',
+  define: { 'process.env.NODE_ENV': '"development"' },
+  plugins: [
+    {
+      name: 'upload-boundaries',
+      setup(build) {
+        build.onResolve({ filter: /^@\/trpc\/client$/ }, () => ({ path: resolve('tests/browser/upload-ui.jsx') }))
+        build.onResolve({ filter: /^next\/navigation$/ }, () => ({ path: 'navigation', namespace: 'upload-stub' }))
+        build.onLoad({ filter: /.*/, namespace: 'upload-stub' }, () => ({
+          contents: 'export const useRouter = () => ({ push: path => window.uploadTest.navigated.push(path) })',
+          loader: 'js',
+        }))
+      },
+    },
+  ],
+})
 createServer((request, response) => {
+  if (request.url === '/upload.js') {
+    response.setHeader('content-type', 'text/javascript')
+    response.end(upload.outputFiles[0].contents)
+    return
+  }
+  if (request.url === '/upload') {
+    response.setHeader('content-type', 'text/html; charset=utf-8')
+    response.end(
+      '<!doctype html><html><head><link rel="stylesheet" href="/interactions.css"></head><body><div id="root"></div><script src="/upload.js"></script></body></html>'
+    )
+    return
+  }
   if (request.url === '/images.js') {
     response.setHeader('content-type', 'text/javascript')
     response.end(images.outputFiles[0].contents)

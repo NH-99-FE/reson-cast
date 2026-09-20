@@ -342,7 +342,7 @@ export const videosRouter = createTRPCRouter({
       .select()
       .from(videos)
       .where(and(eq(videos.id, input.id), eq(videos.userId, ctx.user.id)))
-    if (!video) throw new TRPCError({ code: 'NOT_FOUND' })
+    if (!video) return { id: input.id }
     await requestVideoDeletion(video.id)
     return { id: video.id }
   }),

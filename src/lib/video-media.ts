@@ -24,9 +24,25 @@ export async function muxImage(id: string, kind: 'thumbnail' | 'preview', width:
   const token = await muxToken(id, kind === 'thumbnail' ? 'thumbnail' : 'gif', '1m', params)
   return `https://image.mux.com/${id}/${kind === 'thumbnail' ? 'thumbnail.webp' : 'animated.gif'}?token=${token}`
 }
-export async function deleteFiles(keys: (string | null | undefined)[]) {
+export async function deleteFiles(keys: (string | null | undefined)[], signal?: AbortSignal) {
+  signal?.throwIfAborted()
   const files = keys.filter((key): key is string => !!key)
   if (!files.length) return
-  const result = await new UTApi().deleteFiles(files)
+  const api = new UTApi(
+    signal
+      ? {
+          fetch: (input, init) =>
+            fetch(input, {
+              ...init,
+              signal: AbortSignal.any([
+                signal,
+                AbortSignal.timeout(5000),
+                ...(init && 'signal' in init && init.signal ? [init.signal] : []),
+              ]),
+            }),
+        }
+      : undefined
+  )
+  const result = await api.deleteFiles(files)
   if (!result.success) throw new Error('File cleanup failed')
 }

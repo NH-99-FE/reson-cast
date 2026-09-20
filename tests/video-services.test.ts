@@ -263,3 +263,155 @@ test('visibility update hides immediately on revocation failure and retry restor
     create.mock.restore()
   }
 })
+
+const { runUploadCleanup } = await import('../src/modules/videos/server/services/upload-cleanup')
+async function abandonedFixture() {
+  await reset()
+  await pg.exec(`UPDATE videos SET mux_asset_id=NULL, mux_playback_id=NULL, mux_upload_id='upload', mux_status='waiting',
+    created_at='2020-01-01', updated_at='2020-01-01', thumbnail_key=NULL`)
+}
+test('upload recovery retains active/completed/unknown uploads and provider failures', async () => {
+  for (const response of [
+    { status: 'waiting' },
+    { status: 'asset_created', asset_id: 'asset' },
+    { status: 'timed_out', asset_id: 'asset' },
+    { status: 'unknown' },
+    { status: 404 },
+    { status: 503 },
+  ]) {
+    await abandonedFixture()
+    const retrieve = mock.method(mux.video.uploads, 'retrieve', async () => {
+      if (typeof response.status === 'number') throw response
+      return response
+    })
+    try {
+      await runUploadCleanup()
+      const {
+        rows: [row],
+      } = await pg.query<{ deletion_requested_at: Date | null }>('SELECT deletion_requested_at FROM videos')
+      assert.equal(row.deletion_requested_at, null)
+    } finally {
+      retrieve.mock.restore()
+    }
+  }
+})
+test('terminal empty uploads are submitted for deletion, and late local association prevents deletion', async () => {
+  for (const raced of [false, true]) {
+    await abandonedFixture()
+    const retrieve = mock.method(mux.video.uploads, 'retrieve', async () => {
+      if (raced) await pg.exec("UPDATE videos SET mux_asset_id='late-asset'")
+      return { status: 'timed_out' }
+    })
+    const trigger = mock.method(workflow, 'trigger', async () => ({ workflowRunId: 'test' }))
+    try {
+      const result = await runUploadCleanup()
+      assert.equal(result.submitted, raced ? 0 : 1)
+      assert.equal(trigger.mock.callCount(), raced ? 0 : 1)
+      const {
+        rows: [row],
+      } = await pg.query<{ deletion_requested_at: Date | null }>('SELECT deletion_requested_at FROM videos')
+      assert.equal(row.deletion_requested_at !== null, !raced)
+    } finally {
+      retrieve.mock.restore()
+      trigger.mock.restore()
+    }
+  }
+})
+test('recovery finishes persisted deletion even after dispatch failure', async () => {
+  await abandonedFixture()
+  await pg.exec("UPDATE videos SET deletion_requested_at=now(), deletion_error='dispatch failed'")
+  const retrieve = mock.method(mux.video.uploads, 'retrieve', async () => ({ status: 'cancelled' }))
+  try {
+    const result = await runUploadCleanup()
+    assert.equal(result.recovered, 1)
+    assert.equal((await pg.query('SELECT id FROM videos')).rows.length, 0)
+  } finally {
+    retrieve.mock.restore()
+  }
+})
+
+type CleanupRequestOptions = { signal: AbortSignal; timeout: number; maxRetries: number }
+
+test('maintenance passes one deadline and bounded retry-free options through all Mux cleanup operations', async () => {
+  await abandonedFixture()
+  await pg.exec("UPDATE videos SET deletion_requested_at=now(), deletion_error='dispatch failed', mux_asset_id='asset'")
+  let reads = 0
+  const options: CleanupRequestOptions[] = []
+  const retrieve = mock.method(mux.video.uploads, 'retrieve', async (_id: string, opts: CleanupRequestOptions) => {
+    options.push(opts)
+    return { status: ++reads === 1 ? 'waiting' : 'cancelled' }
+  })
+  const cancel = mock.method(mux.video.uploads, 'cancel', async (_id: string, opts: CleanupRequestOptions) => {
+    options.push(opts)
+  })
+  const remove = mock.method(mux.video.assets, 'delete', async (_id: string, opts: CleanupRequestOptions) => {
+    options.push(opts)
+  })
+  try {
+    assert.equal((await runUploadCleanup()).recovered, 1)
+    assert.equal(options.length, 4)
+    for (const option of options) {
+      assert.equal(option.timeout, 5000)
+      assert.equal(option.maxRetries, 0)
+      assert.ok(option.signal instanceof AbortSignal)
+      assert.equal(option.signal, options[0].signal)
+    }
+  } finally {
+    retrieve.mock.restore()
+    cancel.mock.restore()
+    remove.mock.restore()
+  }
+})
+
+test('an interrupted recovery preserves deletion intent and can be retried', async () => {
+  await abandonedFixture()
+  await pg.exec("UPDATE videos SET deletion_requested_at=now(), deletion_error='dispatch failed'")
+  const { cleanupVideo } = await import('../src/modules/videos/server/services/deletion')
+  const controller = new AbortController()
+  const retrieve = mock.method(mux.video.uploads, 'retrieve', async (_id: string, options: CleanupRequestOptions) => {
+    return new Promise((_resolve, reject) => {
+      options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true })
+      controller.abort(new Error('maintenance deadline'))
+    })
+  })
+  try {
+    await assert.rejects(cleanupVideo(videoId, undefined, controller.signal), /maintenance deadline/)
+    assert.equal((await pg.query('SELECT id FROM videos WHERE deletion_requested_at IS NOT NULL')).rows.length, 1)
+  } finally {
+    retrieve.mock.restore()
+  }
+  const retry = mock.method(mux.video.uploads, 'retrieve', async () => ({ status: 'cancelled' }))
+  try {
+    assert.equal((await runUploadCleanup()).recovered, 1)
+  } finally {
+    retry.mock.restore()
+  }
+})
+
+test('file cleanup propagates cancellation into the UploadThing HTTP request', async () => {
+  const { deleteFiles } = await import('../src/lib/video-media')
+  const savedToken = process.env.UPLOADTHING_TOKEN
+  process.env.UPLOADTHING_TOKEN = Buffer.from(JSON.stringify({ apiKey: 'sk_test', appId: 'test', regions: ['sea1'] })).toString('base64')
+  const controller = new AbortController()
+  let interrupted = false
+  const request = mock.method(globalThis, 'fetch', async (_input: unknown, options: RequestInit & { signal: AbortSignal }) => {
+    return new Promise((_resolve, reject) => {
+      options.signal.addEventListener(
+        'abort',
+        () => {
+          interrupted = true
+          reject(options.signal.reason)
+        },
+        { once: true }
+      )
+      controller.abort(new Error('maintenance deadline'))
+    })
+  })
+  try {
+    await assert.rejects(deleteFiles(['cover'], controller.signal))
+    assert.equal(interrupted, true)
+  } finally {
+    process.env.UPLOADTHING_TOKEN = savedToken
+    request.mock.restore()
+  }
+})

@@ -36,16 +36,22 @@ export async function requestVideoDeletion(videoId: string) {
     throw error
   }
 }
-export async function cleanupVideo(videoId: string, runId?: string) {
+export async function cleanupVideo(videoId: string, runId?: string, signal?: AbortSignal) {
   const condition = and(eq(videos.id, videoId), isNotNull(videos.deletionRequestedAt), runId ? eq(videos.deletionRunId, runId) : undefined)
   const [video] = await db.select().from(videos).where(condition)
   if (!video) return
+  signal?.throwIfAborted()
+  // Maintenance has a short shared deadline; workflows retain their SDK defaults.
+  const options = signal ? { signal, timeout: 5000, maxRetries: 0 } : undefined
+  const removeFiles = (keys: (string | null | undefined)[]) => deleteFiles(keys, signal)
   await cleanupResources(video, {
-    upload: id => mux.video.uploads.retrieve(id),
-    cancelUpload: id => mux.video.uploads.cancel(id),
-    deleteAsset: id => mux.video.assets.delete(id),
-    deleteFiles,
+    upload: id => mux.video.uploads.retrieve(id, options),
+    cancelUpload: id => mux.video.uploads.cancel(id, options),
+    deleteAsset: id => mux.video.assets.delete(id, options),
+    deleteFiles: removeFiles,
   })
-  if (await cleanupVideoFiles(videoId)) throw new Error('旧封面尚未清理完成')
+  signal?.throwIfAborted()
+  if (await cleanupVideoFiles(videoId, removeFiles)) throw new Error('旧封面尚未清理完成')
+  signal?.throwIfAborted()
   await db.delete(videos).where(condition)
 }

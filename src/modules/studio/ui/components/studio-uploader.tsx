@@ -1,19 +1,40 @@
-import MuxUploader, { MuxUploaderDrop, MuxUploaderFileSelect, MuxUploaderProgress, MuxUploaderStatus } from '@mux/mux-uploader-react'
+import MuxUploader, {
+  MuxUploaderDrop,
+  MuxUploaderFileSelect,
+  MuxUploaderProgress,
+  type MuxUploaderRefAttributes,
+  MuxUploaderStatus,
+} from '@mux/mux-uploader-react'
 import { UploadIcon } from 'lucide-react'
+import { type RefObject, useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
 
 interface MuxUploaderProps {
   endpoint?: string | null
   onSuccess: () => void
+  onStarted: () => void
+  uploaderRef: RefObject<MuxUploaderRefAttributes | null>
 }
 
 const UPLOADER_ID = 'video-uploader'
 
-export const StudioUploader = ({ endpoint, onSuccess }: MuxUploaderProps) => {
+export const StudioUploader = ({ endpoint, onSuccess, onStarted, uploaderRef }: MuxUploaderProps) => {
+  useEffect(() => {
+    const element = uploaderRef.current
+    return () => element?.upload?.abort()
+  }, [uploaderRef])
   return (
     <div>
-      <MuxUploader onSuccess={onSuccess} endpoint={endpoint} id={UPLOADER_ID} className="group/uploader hidden" />
+      <MuxUploader
+        ref={uploaderRef}
+        onUploadStart={onStarted}
+        onUploadError={onStarted}
+        onSuccess={onSuccess}
+        endpoint={endpoint}
+        id={UPLOADER_ID}
+        className="group/uploader hidden"
+      />
       <MuxUploaderDrop muxUploader={UPLOADER_ID} className="group/drop">
         <div slot="heading" className="flex flex-col items-center gap-6">
           <div className="flex h-32 w-32 items-center justify-center gap-2 rounded-full bg-muted">
