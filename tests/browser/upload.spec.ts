@@ -190,6 +190,29 @@ test('dialog shrinks and expands at fixed width without unmounting the uploader'
   expect(await page.evaluate(() => window.uploadTest.aborted)).toBe(0)
 })
 
+test('upload ignores outside clicks before the uploading state renders', async ({ page }) => {
+  await page.evaluate(async () => {
+    const dialog = document.querySelector('[role="dialog"]')!
+    await Promise.all(dialog.getAnimations().map(animation => animation.finished))
+
+    // Keep both events in one task to exercise the gap between the ref update and React's render.
+    document.querySelector('mux-uploader')!.dispatchEvent(new CustomEvent('uploadstart'))
+    document
+      .querySelector('[data-slot="dialog-overlay"]')!
+      .dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }))
+
+    // Let any confirmation update commit before checking that the click was ignored.
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  })
+  await expect(page.getByRole('dialog', { name: '上传视频' })).toBeVisible()
+  await expect(page.getByRole('region', { name: '放弃本次上传' })).toHaveCount(0)
+  expect(await page.evaluate(() => window.uploadTest.deleted)).toBe(0)
+
+  // Verify uploadstart was handled and explicit close still opens confirmation.
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(page.getByRole('region', { name: '放弃本次上传' })).toBeVisible()
+})
+
 test('upload ignores outside clicks and respects reduced motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await start(page)

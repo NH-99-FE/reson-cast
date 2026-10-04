@@ -97,7 +97,10 @@ const StudioUploadModal = () => {
       <ResponsiveModal
         variant="dialog"
         title={confirmOpen ? '放弃上传？' : '上传视频'}
-        preventOutsideClose={phase === 'uploading' || phase === 'cancelling' || phase === 'cancel-failed'}
+        onInteractOutside={event => {
+          // Read at event time: uploadstart can arrive before React commits the new phase.
+          if (['uploading', 'cancelling', 'cancel-failed'].includes(phaseRef.current)) event.preventDefault()
+        }}
         onEscapeKeyDown={event => {
           if (confirmOpen) {
             event.preventDefault()

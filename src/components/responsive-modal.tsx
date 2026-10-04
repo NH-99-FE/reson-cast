@@ -12,7 +12,7 @@ interface ResponsiveModalProps {
   descriptionClassName?: string
   onOpenChange?: (open: boolean) => void
   variant?: 'responsive' | 'dialog'
-  preventOutsideClose?: boolean
+  onInteractOutside?: React.ComponentProps<typeof DialogContent>['onInteractOutside']
   onEscapeKeyDown?: (event: KeyboardEvent) => void
 }
 
@@ -25,7 +25,7 @@ export const ResponsiveModal = ({
   dialogClassName,
   headerClassName,
   descriptionClassName = 'sr-only',
-  preventOutsideClose,
+  onInteractOutside,
   onEscapeKeyDown,
   variant = 'responsive',
 }: ResponsiveModalProps) => {
@@ -35,9 +35,7 @@ export const ResponsiveModal = ({
       <Drawer open={open} onOpenChange={onOpenChange}>
         <DrawerContent
           {...(!description ? { 'aria-describedby': undefined } : {})}
-          onInteractOutside={event => {
-            if (preventOutsideClose) event.preventDefault()
-          }}
+          onInteractOutside={onInteractOutside}
           onEscapeKeyDown={onEscapeKeyDown}
         >
           <DrawerHeader className={headerClassName}>
@@ -54,9 +52,7 @@ export const ResponsiveModal = ({
       <DialogContent
         className={dialogClassName}
         {...(!description ? { 'aria-describedby': undefined } : {})}
-        onInteractOutside={event => {
-          if (preventOutsideClose) event.preventDefault()
-        }}
+        onInteractOutside={onInteractOutside}
         onEscapeKeyDown={onEscapeKeyDown}
       >
         <DialogHeader className={headerClassName}>
