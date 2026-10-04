@@ -3,10 +3,10 @@ import { test } from 'node:test'
 
 import { createOutboxSchedule } from '../src/lib/realtime/schedule'
 
-test('production scanner retains its ID, ten-minute interval and no retries', () => {
+test('production scanner retains its ID, hourly interval and no retries', () => {
   assert.deepEqual(createOutboxSchedule('production', 'https://reson-cast.vercel.app/'), {
     destination: 'https://reson-cast.vercel.app/api/realtime/dispatch',
-    cron: '*/10 * * * *',
+    cron: '0 * * * *',
     scheduleId: 'studio-realtime-outbox',
     retries: 0,
   })
