@@ -45,7 +45,7 @@ export const PlaylistCreateModal = ({ onOpenChange, open }: PlaylistCreateModalP
     create.mutate(values)
   }
   return (
-    <ResponsiveModal open={open} title="新建播放列表" onOpenChange={onOpenChange}>
+    <ResponsiveModal open={open} title="新建播放列表" description="输入标题，创建一个播放列表来收藏视频。" onOpenChange={onOpenChange}>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <FormField

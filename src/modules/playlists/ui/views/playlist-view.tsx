@@ -20,7 +20,7 @@ export const PlaylistsView = () => {
           <PlusIcon />
         </Button>
       </div>
-      <PlaylistsSection />
+      <PlaylistsSection onCreate={() => setCreateModalOpen(true)} />
     </div>
   )
 }

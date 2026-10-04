@@ -69,8 +69,6 @@ const PlaylistGridCardSkeleton = () => (
     <div className="flex gap-3">
       <div className="min-w-0 flex-1 space-y-2">
         <Skeleton className="h-4 w-[60%]" />
-        <Skeleton className="h-4 w-[40%]" />
-        <Skeleton className="h-4 w-[30%]" />
       </div>
     </div>
   </div>

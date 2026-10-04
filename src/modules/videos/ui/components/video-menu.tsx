@@ -24,18 +24,24 @@ export const VideoMenu = ({ videoId, variant = 'ghost', onRemove }: VideoMenuPro
   return (
     <>
       <PlaylistAddModal videoId={videoId} open={isOpenPlaylistAddModal} onOpenChange={setIsOpenPlaylistAddModal} />
-      <DropdownMenu>
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button variant={variant} size="icon" className="rounded-full">
             <MoreVerticalIcon />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
+        <DropdownMenuContent
+          align="end"
+          onClick={e => e.stopPropagation()}
+          onCloseAutoFocus={event => {
+            if (isOpenPlaylistAddModal) event.preventDefault()
+          }}
+        >
           <DropdownMenuItem onClick={onShare}>
             <ShareIcon className="mr-2 size-4" />
             分享
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setIsOpenPlaylistAddModal(true)}>
+          <DropdownMenuItem onSelect={() => setIsOpenPlaylistAddModal(true)}>
             <ListPlusIcon className="mr-2 size-4" />
             加入播放列表
           </DropdownMenuItem>

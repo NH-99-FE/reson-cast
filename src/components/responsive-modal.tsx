@@ -1,11 +1,15 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { useIsMobile } from '@/hooks/use-mobile'
 
 interface ResponsiveModalProps {
   children: React.ReactNode
   open: boolean
   title: string
+  description?: string
+  dialogClassName?: string
+  headerClassName?: string
+  descriptionClassName?: string
   onOpenChange?: (open: boolean) => void
   variant?: 'responsive' | 'dialog'
   preventOutsideClose?: boolean
@@ -17,6 +21,10 @@ export const ResponsiveModal = ({
   onOpenChange,
   open,
   title,
+  description,
+  dialogClassName,
+  headerClassName,
+  descriptionClassName = 'sr-only',
   preventOutsideClose,
   onEscapeKeyDown,
   variant = 'responsive',
@@ -26,13 +34,15 @@ export const ResponsiveModal = ({
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
         <DrawerContent
+          {...(!description ? { 'aria-describedby': undefined } : {})}
           onInteractOutside={event => {
             if (preventOutsideClose) event.preventDefault()
           }}
           onEscapeKeyDown={onEscapeKeyDown}
         >
-          <DrawerHeader>
+          <DrawerHeader className={headerClassName}>
             <DrawerTitle>{title}</DrawerTitle>
+            {description && <DrawerDescription className={descriptionClassName}>{description}</DrawerDescription>}
           </DrawerHeader>
           {children}
         </DrawerContent>
@@ -42,13 +52,16 @@ export const ResponsiveModal = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        className={dialogClassName}
+        {...(!description ? { 'aria-describedby': undefined } : {})}
         onInteractOutside={event => {
           if (preventOutsideClose) event.preventDefault()
         }}
         onEscapeKeyDown={onEscapeKeyDown}
       >
-        <DialogHeader>
+        <DialogHeader className={headerClassName}>
           <DialogTitle>{title}</DialogTitle>
+          {description && <DialogDescription className={descriptionClassName}>{description}</DialogDescription>}
         </DialogHeader>
         {children}
       </DialogContent>
