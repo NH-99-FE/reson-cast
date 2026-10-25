@@ -9,9 +9,11 @@ CREATE TABLE IF NOT EXISTS video_generation_jobs (
   expected_value text,
   prompt text,
   result text,
+  resolution text CONSTRAINT video_generation_resolution CHECK (resolution IN ('pending', 'adopted', 'dismissed')),
   error text,
   created_at timestamp NOT NULL DEFAULT now(),
-  finished_at timestamp
+  finished_at timestamp,
+  CONSTRAINT video_generation_resolution_scope CHECK (resolution IS NULL OR (status = 'conflict' AND kind IN ('title', 'description') AND result IS NOT NULL))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS video_generation_active
   ON video_generation_jobs(video_id, kind) WHERE status IN ('queued', 'running');

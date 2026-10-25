@@ -194,7 +194,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
   }
 
   const update = trpc.videos.update.useMutation({
-    onSuccess: (saved, submitted) => {
+    onSuccess: async (saved, submitted) => {
       if (!mounted.current) return
       for (const key of editableVideoFields) {
         if (!Object.hasOwn(submitted, key)) continue
@@ -204,12 +204,18 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
         if (latest !== submitted[key]) form.setValue(key, latest, { shouldDirty: true })
       }
       utils.studio.getOne.setData({ id: videoId }, saved)
+      await Promise.all([
+        titleGeneration.confirmAdoption(submitted.adoptedGenerationJobs?.title),
+        descriptionGeneration.confirmAdoption(submitted.adoptedGenerationJobs?.description),
+      ])
       refreshRelated()
-      toast.success('更新成功')
+      if (saved.muxPlaybackIdToRevoke) toast.warning('内容已保存，旧播放权限尚未撤销，请重试撤销')
+      else toast.success('更新成功')
     },
     onError: error => {
       if (!mounted.current) return
       refreshVideo()
+      void utils.videos.getGenerationStatus.invalidate({ id: videoId })
       toast.error(error.message || '更新失败')
     },
   })
@@ -279,9 +285,37 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
   })
   const locked = { title: titleGeneration.fieldLocked, description: descriptionGeneration.fieldLocked }
   const patch = dirtyVideoPatch(form.getValues(), form.formState.dirtyFields, locked)
+  const hasAdoption = !!titleGeneration.adoptionJobId || !!descriptionGeneration.adoptionJobId
+  const saveBlocked = unavailable || update.isPending || titleGeneration.dismissing || descriptionGeneration.dismissing
+  const canSave = !saveBlocked && (Object.keys(patch).length > 0 || hasAdoption)
+  const generationDisabledReason = (kind: 'title' | 'description') => {
+    const generation = kind === 'title' ? titleGeneration : descriptionGeneration
+    const label = kind === 'title' ? '标题' : '简介'
+    if (unavailable) return '视频已删除或无法访问'
+    if (form.formState.dirtyFields[kind] || generation.adoptionJobId) return `请先保存${label}，再生成`
+    if (generation.dismissing) return '正在处理生成结果'
+    if (update.isPending) return '正在保存'
+    if (!video.muxTrackId) return '视频字幕尚未就绪'
+    return ''
+  }
+  const titleDisabledReason = generationDisabledReason('title')
+  const descriptionDisabledReason = generationDisabledReason('description')
   const onSubmit = (data: z.infer<typeof videoUpdateSchema>) => {
     const changes = dirtyVideoPatch(data, form.formState.dirtyFields, locked)
-    if (!unavailable && !update.isPending && Object.keys(changes).length) update.mutate({ id: videoId, ...changes })
+    const adoptedGenerationJobs = {
+      title: !locked.title ? titleGeneration.adoptionJobId : undefined,
+      description: !locked.description ? descriptionGeneration.adoptionJobId : undefined,
+    }
+    // Explicit adoption must be savable even when the result equals the saved value.
+    if (adoptedGenerationJobs.title) changes.title = data.title
+    if (adoptedGenerationJobs.description) changes.description = data.description
+    if (canSave && Object.keys(changes).length) {
+      update.mutate({
+        id: videoId,
+        ...changes,
+        ...(adoptedGenerationJobs.title || adoptedGenerationJobs.description ? { adoptedGenerationJobs } : {}),
+      })
+    }
   }
 
   const fullUrl = `${APP_URL}/videos/${videoId}`
@@ -316,7 +350,7 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
               <p className="text-xs text-muted-foreground">管理你的视频</p>
             </div>
             <div className="flex items-center gap-x-2">
-              <Button type="submit" variant="outline" disabled={unavailable || update.isPending || !Object.keys(patch).length}>
+              <Button type="submit" variant="outline" disabled={!canSave}>
                 {update.isPending ? <Loader2Icon className="w-8 animate-spin" /> : <SaveIcon />}
                 保存
               </Button>
@@ -366,17 +400,20 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                         <GenerationAction
                           label="标题"
                           task={titleGeneration}
-                          disabled={update.isPending || !!form.formState.dirtyFields.title || !video.muxTrackId}
-                          disabledReason={
-                            form.formState.dirtyFields.title ? '请先保存标题，再生成' : !video.muxTrackId ? '视频字幕尚未就绪' : '正在保存'
-                          }
+                          disabled={!!titleDisabledReason}
+                          disabledReason={titleDisabledReason}
                         />
                       </div>
                       {titleGeneration.suggestion && !titleGeneration.locked && (
                         <GenerationSuggestion
+                          key={titleGeneration.job?.id}
                           label="标题"
                           suggestion={titleGeneration.suggestion}
                           onAdopt={titleGeneration.adoptSuggestion}
+                          onDismiss={titleGeneration.dismissSuggestion}
+                          adopted={!!titleGeneration.adoptionJobId}
+                          disabled={unavailable || update.isPending}
+                          dismissing={titleGeneration.dismissing}
                         />
                       )}
                     </div>
@@ -398,21 +435,20 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                         <GenerationAction
                           label="简介"
                           task={descriptionGeneration}
-                          disabled={update.isPending || !!form.formState.dirtyFields.description || !video.muxTrackId}
-                          disabledReason={
-                            form.formState.dirtyFields.description
-                              ? '请先保存简介，再生成'
-                              : !video.muxTrackId
-                                ? '视频字幕尚未就绪'
-                                : '正在保存'
-                          }
+                          disabled={!!descriptionDisabledReason}
+                          disabledReason={descriptionDisabledReason}
                         />
                       </div>
                       {descriptionGeneration.suggestion && !descriptionGeneration.locked && (
                         <GenerationSuggestion
+                          key={descriptionGeneration.job?.id}
                           label="简介"
                           suggestion={descriptionGeneration.suggestion}
                           onAdopt={descriptionGeneration.adoptSuggestion}
+                          onDismiss={descriptionGeneration.dismissSuggestion}
+                          adopted={!!descriptionGeneration.adoptionJobId}
+                          disabled={unavailable || update.isPending}
+                          dismissing={descriptionGeneration.dismissing}
                         />
                       )}
                     </div>

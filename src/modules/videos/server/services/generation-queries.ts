@@ -17,6 +17,7 @@ export function finishTextGenerationQuery(jobId: string, kind: VideoAIKind, cont
     ), finished AS (
       UPDATE video_generation_jobs j
       SET status = CASE WHEN EXISTS (SELECT 1 FROM saved) THEN 'completed' ELSE 'conflict' END,
+          resolution = CASE WHEN EXISTS (SELECT 1 FROM saved) THEN NULL ELSE 'pending' END,
           result = ${content}, error = NULL, finished_at = now()
       FROM job WHERE j.id = job.id AND job.status IN ('queued', 'running')
       RETURNING j.status, j.result

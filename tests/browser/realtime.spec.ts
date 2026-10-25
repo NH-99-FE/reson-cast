@@ -159,3 +159,39 @@ test('connection indicator stays quiet during reconnects and offers recovery aft
     })
   ).toBe(true)
 })
+
+test('remote resolution hides only the processed result and preserves local edits', async ({ page }) => {
+  await page.goto('/realtime')
+  const title = page.locator('input[name="title"]')
+  await expect(title).toHaveValue('Original title')
+  await page.getByRole('button', { name: 'AI 生成标题', exact: true }).click()
+  await expect(title).toBeDisabled()
+  await page.evaluate(() => {
+    // @ts-expect-error browser harness
+    const h = window.realtimeTest
+    Object.assign(Object.values(h.state.runs).at(-1) as object, { status: 'conflict', resolution: 'pending', result: 'Pending result' })
+    h.send('generation.changed', 'title')
+  })
+  const result = page.getByRole('button', { name: '查看待处理的标题生成结果' })
+  await expect(result).toBeVisible()
+  await title.fill('Local draft')
+  await page.evaluate(() => {
+    // @ts-expect-error browser harness
+    const h = window.realtimeTest
+    Object.assign(Object.values(h.state.runs).at(-1) as object, { resolution: 'dismissed' })
+    h.send('generation.changed', 'title')
+  })
+  await expect(result).toHaveCount(0)
+  await expect(title).toHaveValue('Local draft')
+  await page.getByRole('button', { name: '保存', exact: true }).click()
+  await expect(page.getByRole('button', { name: '保存', exact: true })).toBeDisabled()
+  await page.getByRole('button', { name: 'AI 生成标题', exact: true }).click()
+  await expect(title).toBeDisabled()
+  await page.evaluate(() => {
+    // @ts-expect-error browser harness
+    const h = window.realtimeTest
+    Object.assign(Object.values(h.state.runs).at(-1) as object, { status: 'conflict', resolution: 'pending', result: 'New result' })
+    h.send('generation.changed', 'title')
+  })
+  await expect(result).toBeVisible()
+})

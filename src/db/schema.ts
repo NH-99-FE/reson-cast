@@ -3,6 +3,7 @@ import { check, foreignKey, index, integer, pgTable, primaryKey, text, timestamp
 import { pgEnum } from 'drizzle-orm/pg-core/columns/enum'
 import { relations } from 'drizzle-orm/relations'
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod'
+import { z } from 'zod'
 
 export const reactionType = pgEnum('reaction_type', ['like', 'dislike'])
 
@@ -186,6 +187,7 @@ export const videoGenerationJobs = pgTable(
     expectedValue: text('expected_value'),
     prompt: text('prompt'),
     result: text('result'),
+    resolution: text('resolution', { enum: ['pending', 'adopted', 'dismissed'] }),
     error: text('error'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     finishedAt: timestamp('finished_at'),
@@ -193,6 +195,11 @@ export const videoGenerationJobs = pgTable(
   table => [
     check('video_generation_kind', sql`${table.kind} in ('title', 'description', 'thumbnail')`),
     check('video_generation_status', sql`${table.status} in ('queued', 'running', 'completed', 'conflict', 'failed')`),
+    check('video_generation_resolution', sql`${table.resolution} in ('pending', 'adopted', 'dismissed')`),
+    check(
+      'video_generation_resolution_scope',
+      sql`${table.resolution} is null or (${table.status} = 'conflict' and ${table.kind} in ('title', 'description') and ${table.result} is not null)`
+    ),
     index('video_generation_latest').on(table.videoId, table.kind, table.createdAt.desc(), table.id.desc()),
     uniqueIndex('video_generation_active')
       .on(table.videoId, table.kind)
@@ -230,6 +237,19 @@ export const videoUpdateSchema = createUpdateSchema(videos).pick({
   categoryId: true,
   visibility: true,
 })
+
+// Adoption is explicit intent, not inferred from matching generated text.
+export const videoSaveSchema = videoUpdateSchema
+  .extend({
+    adoptedGenerationJobs: z.object({ title: z.uuid().optional(), description: z.uuid().optional() }).optional(),
+  })
+  .superRefine((value, ctx) => {
+    for (const kind of ['title', 'description'] as const) {
+      if (value.adoptedGenerationJobs?.[kind] && value[kind] === undefined) {
+        ctx.addIssue({ code: 'custom', path: [kind], message: '采用生成结果时必须同时保存对应字段' })
+      }
+    }
+  })
 
 export const categoryRelations = relations(categories, ({ many }) => ({ videos: many(videos) }))
 

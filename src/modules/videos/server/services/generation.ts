@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
 import { TRPCError } from '@trpc/server'
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 
 import { db } from '@/db'
-import { videoGenerationJobs } from '@/db/schema'
+import { videoGenerationJobs, videos } from '@/db/schema'
 import { getVideoAIConfig, type VideoAIKind } from '@/lib/video-ai'
 import { getImageAIConfig } from '@/lib/video-image-ai'
 import { workflow } from '@/lib/workflow'
@@ -45,6 +45,38 @@ export async function getGenerationJob(videoId: string, userId: string, kind: Ge
     .orderBy(desc(videoGenerationJobs.createdAt), desc(videoGenerationJobs.id))
     .limit(1)
   return job ?? null
+}
+
+export async function dismissGenerationResult(videoId: string, userId: string, kind: VideoAIKind, jobId: string) {
+  await requireVideo(videoId, userId, true)
+  const scope = and(
+    eq(videoGenerationJobs.id, jobId),
+    eq(videoGenerationJobs.videoId, videoId),
+    eq(videoGenerationJobs.userId, userId),
+    eq(videoGenerationJobs.kind, kind),
+    eq(videoGenerationJobs.status, 'conflict'),
+    isNotNull(videoGenerationJobs.result)
+  )
+  const [updated] = await db
+    .update(videoGenerationJobs)
+    .set({ resolution: 'dismissed' })
+    .where(
+      and(
+        scope,
+        eq(videoGenerationJobs.resolution, 'pending'),
+        sql`exists (${db
+          .select({ id: videos.id })
+          .from(videos)
+          .where(and(eq(videos.id, videoId), eq(videos.userId, userId), isNull(videos.deletionRequestedAt)))})`
+      )
+    )
+    .returning()
+  if (updated) return updated
+  const [current] = await db.select().from(videoGenerationJobs).where(scope)
+  if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: '生成结果不存在' })
+  // Retrying a lost response is safe; an adopted result cannot become dismissed.
+  if (current.resolution === 'dismissed') return current
+  throw new TRPCError({ code: 'CONFLICT', message: '生成结果已被处理，请刷新后重试' })
 }
 
 async function dispatchGeneration(job: GenerationJob) {

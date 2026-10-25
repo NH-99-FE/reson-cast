@@ -1,12 +1,28 @@
 'use client'
 
-import { HistoryIcon, XIcon } from 'lucide-react'
+import { ClipboardListIcon, XIcon } from 'lucide-react'
 import { useId, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
-export function GenerationSuggestion({ label, suggestion, onAdopt }: { label: string; suggestion: string; onAdopt: () => void }) {
+export function GenerationSuggestion({
+  label,
+  suggestion,
+  adopted,
+  disabled,
+  dismissing,
+  onAdopt,
+  onDismiss,
+}: {
+  label: string
+  suggestion: string
+  adopted: boolean
+  disabled: boolean
+  dismissing: boolean
+  onAdopt: () => void
+  onDismiss: () => void
+}) {
   const [open, setOpen] = useState(false)
   const headingId = useId()
   const descriptionId = useId()
@@ -19,10 +35,10 @@ export function GenerationSuggestion({ label, suggestion, onAdopt }: { label: st
           variant="ghost"
           size="sm"
           className="h-6 shrink-0 gap-1.5 px-2 text-xs font-normal text-muted-foreground"
-          aria-label={`查看未采用的${label}生成结果`}
+          aria-label={`查看待处理的${label}生成结果`}
         >
-          <HistoryIcon className="size-3" aria-hidden="true" />
-          生成结果
+          <ClipboardListIcon className="size-3.5" aria-hidden="true" />
+          待处理
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -36,10 +52,10 @@ export function GenerationSuggestion({ label, suggestion, onAdopt }: { label: st
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
             <h3 id={headingId} className="text-sm font-medium">
-              未采用的{label}
+              {label}生成结果
             </h3>
             <p id={descriptionId} className="text-xs text-muted-foreground">
-              采用后将替换编辑框内容，保存后生效。
+              {adopted ? '已填入编辑框，可继续修改，保存后生效。' : '填入后可继续修改，保存成功后将不再提示。'}
             </p>
           </div>
           <Button
@@ -61,16 +77,27 @@ export function GenerationSuggestion({ label, suggestion, onAdopt }: { label: st
         >
           {suggestion}
         </div>
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-2">
           <Button
             type="button"
             size="sm"
+            variant="ghost"
+            className="text-muted-foreground"
+            disabled={disabled || dismissing}
+            onClick={onDismiss}
+          >
+            {dismissing ? '正在忽略…' : '忽略此结果'}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={disabled || dismissing || adopted}
             onClick={() => {
               onAdopt()
               setOpen(false)
             }}
           >
-            采用到编辑框
+            {adopted ? '已填入，待保存' : '采用到编辑框'}
           </Button>
         </div>
       </PopoverContent>

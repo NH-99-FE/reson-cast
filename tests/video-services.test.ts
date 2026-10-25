@@ -17,8 +17,15 @@ const { db } = await import('../src/db')
 const { videos } = await import('../src/db/schema')
 const { workflow } = await import('../src/lib/workflow')
 const { mux } = await import('../src/lib/mux')
-const { startVideoGeneration, retryVideoGeneration, beginGeneration, finishTextGeneration, getGenerationJob, failGeneration } =
-  await import('../src/modules/videos/server/services/generation')
+const {
+  startVideoGeneration,
+  retryVideoGeneration,
+  beginGeneration,
+  finishTextGeneration,
+  getGenerationJob,
+  failGeneration,
+  dismissGenerationResult,
+} = await import('../src/modules/videos/server/services/generation')
 const { restoreVideoThumbnail, cleanupVideoFiles, pendingFileCleanup } = await import('../src/modules/videos/server/services/thumbnails')
 const { updateVideo, resumePlaybackRevocation } = await import('../src/modules/videos/server/services/update')
 const { syncMuxSubtitle } = await import('../src/modules/videos/server/services/subtitles')
@@ -38,7 +45,8 @@ before(async () => {
   await pg.exec(await readFile(new URL('../scripts/sql/add-video-generation-jobs.sql', import.meta.url), 'utf8'))
   mock.method(db.$client, 'query', async (sql: string, params: unknown[], options: { arrayMode?: boolean }) => {
     const result = await pg.query<Record<string, unknown>>(sql, params)
-    const normalize = (value: unknown) => (value instanceof Date ? value.toISOString() : value)
+    // Neon returns timestamp-without-time-zone as a string without a zone suffix.
+    const normalize = (value: unknown) => (value instanceof Date ? value.toISOString().replace(/Z$/, '') : value)
     return {
       ...result,
       rows: options?.arrayMode ? result.rows.map(row => result.fields.map(field => normalize(row[field.name]))) : result.rows,
@@ -208,7 +216,8 @@ test('cleanup preserves latest conflict recovery and regeneration; pruned callba
     })
     await failGeneration(old.id)
     assert.equal((await pg.query<{ title: string }>('SELECT title FROM videos')).rows[0].title, 'User edit')
-    await updateVideo({ id: videoId, title: recovered!.result! }, owner)
+    await updateVideo({ id: videoId, title: recovered!.result!, adoptedGenerationJobs: { title: latest.id } }, owner)
+    assert.equal((await getGenerationJob(videoId, owner, 'title'))?.resolution, 'adopted')
     assert.equal((await pg.query<{ title: string }>('SELECT title FROM videos')).rows[0].title, 'Conflict suggestion')
     assert.equal((await retryVideoGeneration(latest.id, owner)).status, 'conflict', 'terminal tasks never reactivate')
     const next = await startVideoGeneration('title', videoId, owner)
@@ -247,7 +256,9 @@ test('visibility update hides immediately on revocation failure and retry restor
   })
   const create = mock.method(mux.video.assets, 'createPlaybackId', async () => ({ id: 'replacement', policy: 'signed' }))
   try {
-    await assert.rejects(updateVideo({ id: videoId, visibility: 'private' }, owner))
+    const saved = await updateVideo({ id: videoId, visibility: 'private' }, owner)
+    assert.equal(saved.visibility, 'private')
+    assert.equal(saved.muxPlaybackIdToRevoke, 'playback')
     const {
       rows: [row],
     } = await pg.query('SELECT visibility,mux_playback_id,mux_playback_id_to_revoke FROM videos')
@@ -413,5 +424,179 @@ test('file cleanup propagates cancellation into the UploadThing HTTP request', a
   } finally {
     process.env.UPLOADTHING_TOKEN = savedToken
     request.mock.restore()
+  }
+})
+
+async function pendingTextResult(kind: 'title' | 'description' = 'title') {
+  const { rows } = await pg.query<{ id: string }>(
+    `INSERT INTO video_generation_jobs(video_id,user_id,kind,status,workflow_run_id,result,resolution,finished_at)
+     VALUES ($1,$2,$3,'conflict',gen_random_uuid()::text,'Generated','pending',now()) RETURNING id`,
+    [videoId, owner, kind]
+  )
+  return rows[0].id
+}
+
+test('explicit adoption saves edited content and resolution atomically; retries preserve the result', async () => {
+  await reset()
+  const title = await pendingTextResult()
+  const description = await pendingTextResult('description')
+  const input = {
+    id: videoId,
+    title: 'Edited suggestion',
+    description: 'Edited description',
+    adoptedGenerationJobs: { title, description },
+  }
+  const saved = await updateVideo(input, owner)
+  assert.equal(saved.title, 'Edited suggestion')
+  assert.equal(saved.description, 'Edited description')
+  const resolved = await getGenerationJob(videoId, owner, 'title')
+  assert.equal(resolved?.status, 'conflict')
+  assert.equal(resolved?.resolution, 'adopted')
+  await updateVideo(input, owner)
+  assert.equal((await getGenerationJob(videoId, owner, 'title'))?.resolution, 'adopted')
+  await finishTextGeneration(title, 'title', 'Late replay')
+  assert.equal((await getGenerationJob(videoId, owner, 'title'))?.resolution, 'adopted')
+  assert.equal((await pg.query<{ title: string }>('SELECT title FROM videos')).rows[0].title, 'Edited suggestion')
+})
+
+test('normal saves do not infer adoption, while identical-content explicit adoption is supported', async () => {
+  await reset()
+  const id = await pendingTextResult()
+  await updateVideo({ id: videoId, title: 'Generated' }, owner)
+  assert.equal((await getGenerationJob(videoId, owner, 'title'))?.resolution, 'pending')
+  await updateVideo({ id: videoId, title: 'Generated', adoptedGenerationJobs: { title: id } }, owner)
+  assert.equal((await getGenerationJob(videoId, owner, 'title'))?.resolution, 'adopted')
+})
+
+test('resolution write failure rolls back both content and other adoptions', async () => {
+  await reset()
+  const title = await pendingTextResult()
+  const description = await pendingTextResult('description')
+  await pg.exec(
+    "ALTER TABLE video_generation_jobs ADD CONSTRAINT simulate_resolution_failure CHECK (kind <> 'description' OR resolution <> 'adopted')"
+  )
+  try {
+    await assert.rejects(
+      updateVideo({ id: videoId, title: 'Lost', description: 'Lost', adoptedGenerationJobs: { title, description } }, owner)
+    )
+    assert.equal((await pg.query<{ title: string }>('SELECT title FROM videos')).rows[0].title, 'Original')
+    assert.deepEqual((await pg.query('SELECT DISTINCT resolution FROM video_generation_jobs')).rows, [{ resolution: 'pending' }])
+  } finally {
+    await pg.exec('ALTER TABLE video_generation_jobs DROP CONSTRAINT simulate_resolution_failure')
+  }
+})
+
+test('dismissal is idempotent, preserves text, and stale adoption cannot save unrelated fields', async () => {
+  await reset()
+  const title = await pendingTextResult()
+  const description = await pendingTextResult('description')
+  const dismissed = await dismissGenerationResult(videoId, owner, 'title', title)
+  assert.equal(dismissed.resolution, 'dismissed')
+  assert.equal(dismissed.result, 'Generated')
+  assert.equal((await dismissGenerationResult(videoId, owner, 'title', title)).resolution, 'dismissed')
+  await assert.rejects(
+    updateVideo({ id: videoId, title: 'Lost', description: 'Lost', adoptedGenerationJobs: { title, description } }, owner),
+    { code: 'CONFLICT' }
+  )
+  assert.equal((await pg.query<{ title: string }>('SELECT title FROM videos')).rows[0].title, 'Original')
+  assert.equal((await getGenerationJob(videoId, owner, 'description'))?.resolution, 'pending')
+  await updateVideo({ id: videoId, description: 'Adopted', adoptedGenerationJobs: { description } }, owner)
+  await assert.rejects(dismissGenerationResult(videoId, owner, 'description', description), { code: 'CONFLICT' })
+})
+
+test('adoption and dismissal reject mismatched fields, missing fields, foreign tasks and inaccessible videos', async () => {
+  await reset()
+  const id = await pendingTextResult()
+  await assert.rejects(updateVideo({ id: videoId, description: 'Lost', adoptedGenerationJobs: { description: id } }, owner), {
+    code: 'CONFLICT',
+  })
+  await assert.rejects(updateVideo({ id: videoId, adoptedGenerationJobs: { title: id } }, owner), { code: 'BAD_REQUEST' })
+  await assert.rejects(dismissGenerationResult(videoId, owner, 'description', id), { code: 'NOT_FOUND' })
+  const other = '00000000-0000-4000-8000-000000000099'
+  await pg.query('INSERT INTO users(id) VALUES($1)', [other])
+  await pg.query('UPDATE video_generation_jobs SET user_id=$1 WHERE id=$2', [other, id])
+  await assert.rejects(updateVideo({ id: videoId, title: 'Lost', adoptedGenerationJobs: { title: id } }, owner), { code: 'CONFLICT' })
+  await assert.rejects(dismissGenerationResult(videoId, owner, 'title', id), { code: 'NOT_FOUND' })
+  await pg.query('UPDATE video_generation_jobs SET user_id=$1 WHERE id=$2', [owner, id])
+  await pg.exec('UPDATE videos SET deletion_requested_at=now()')
+  await assert.rejects(updateVideo({ id: videoId, title: 'Lost', adoptedGenerationJobs: { title: id } }, owner), { code: 'NOT_FOUND' })
+  await assert.rejects(dismissGenerationResult(videoId, owner, 'title', id), { code: 'NOT_FOUND' })
+  assert.equal((await pg.query<{ title: string }>('SELECT title FROM videos')).rows[0].title, 'Original')
+})
+
+test('resolution migration backfills historical conflicts, is repeatable and preserves resolved records', async () => {
+  await reset()
+  const pending = await pendingTextResult()
+  const adopted = await pendingTextResult('description')
+  await updateVideo({ id: videoId, description: 'Generated', adoptedGenerationJobs: { description: adopted } }, owner)
+  await pg.query('UPDATE video_generation_jobs SET resolution=NULL WHERE id=$1', [pending])
+  const migration = await readFile(new URL('../scripts/sql/add-generation-resolution.sql', import.meta.url), 'utf8')
+  await pg.exec(migration)
+  await pg.exec(migration)
+  assert.equal((await getGenerationJob(videoId, owner, 'title'))?.resolution, 'pending')
+  const after = await getGenerationJob(videoId, owner, 'description')
+  assert.equal(after?.resolution, 'adopted')
+})
+
+test('stale adoption cannot change visibility or revoke playback before rejecting the save', async () => {
+  await reset()
+  const title = await pendingTextResult()
+  await dismissGenerationResult(videoId, owner, 'title', title)
+  const revoke = mock.method(mux.video.assets, 'deletePlaybackId', async () => {})
+  const create = mock.method(mux.video.assets, 'createPlaybackId', async () => ({ id: 'replacement', policy: 'signed' }))
+  try {
+    await assert.rejects(updateVideo({ id: videoId, title: 'Lost', visibility: 'private', adoptedGenerationJobs: { title } }, owner), {
+      code: 'CONFLICT',
+    })
+    assert.deepEqual((await pg.query('SELECT title,visibility,mux_playback_id,mux_playback_id_to_revoke FROM videos')).rows, [
+      { title: 'Original', visibility: 'public', mux_playback_id: 'playback', mux_playback_id_to_revoke: null },
+    ])
+    assert.equal(revoke.mock.callCount(), 0)
+    assert.equal(create.mock.callCount(), 0)
+  } finally {
+    revoke.mock.restore()
+    create.mock.restore()
+  }
+})
+
+test('failed adoption write rolls back visibility and never reaches the playback provider', async () => {
+  await reset()
+  const title = await pendingTextResult()
+  const revoke = mock.method(mux.video.assets, 'deletePlaybackId', async () => {})
+  await pg.exec("ALTER TABLE video_generation_jobs ADD CONSTRAINT simulate_resolution_failure CHECK (resolution <> 'adopted')")
+  try {
+    await assert.rejects(updateVideo({ id: videoId, title: 'Lost', visibility: 'private', adoptedGenerationJobs: { title } }, owner))
+    assert.deepEqual((await pg.query('SELECT title,visibility,mux_playback_id,mux_playback_id_to_revoke FROM videos')).rows, [
+      { title: 'Original', visibility: 'public', mux_playback_id: 'playback', mux_playback_id_to_revoke: null },
+    ])
+    assert.equal((await getGenerationJob(videoId, owner, 'title'))?.resolution, 'pending')
+    assert.equal(revoke.mock.callCount(), 0)
+  } finally {
+    await pg.exec('ALTER TABLE video_generation_jobs DROP CONSTRAINT simulate_resolution_failure')
+    revoke.mock.restore()
+  }
+})
+
+test('provider outage returns saved adoption and pending revocation; subsequent edits can still save', async () => {
+  await reset()
+  const title = await pendingTextResult()
+  const revoke = mock.method(mux.video.assets, 'deletePlaybackId', async () => {
+    throw new Error('provider unavailable')
+  })
+  const create = mock.method(mux.video.assets, 'createPlaybackId', async () => ({ id: 'replacement', policy: 'signed' }))
+  try {
+    const saved = await updateVideo({ id: videoId, title: 'Adopted', visibility: 'private', adoptedGenerationJobs: { title } }, owner)
+    assert.equal(saved.title, 'Adopted')
+    assert.equal(saved.visibility, 'private')
+    assert.equal(saved.muxPlaybackIdToRevoke, 'playback')
+    assert.equal((await getGenerationJob(videoId, owner, 'title'))?.resolution, 'adopted')
+    assert.equal(create.mock.callCount(), 0)
+    const edited = await updateVideo({ id: videoId, title: 'Later edit' }, owner)
+    assert.equal(edited.title, 'Later edit')
+    assert.equal(edited.muxPlaybackIdToRevoke, 'playback')
+    await assert.rejects(updateVideo({ id: videoId, visibility: 'public' }, owner), { code: 'CONFLICT' })
+  } finally {
+    revoke.mock.restore()
+    create.mock.restore()
   }
 })

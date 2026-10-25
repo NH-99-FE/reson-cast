@@ -51,7 +51,7 @@ CREATE TRIGGER studio_video_event AFTER INSERT OR UPDATE OR DELETE ON videos
 CREATE OR REPLACE FUNCTION capture_studio_generation_event() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'UPDATE' THEN
-    IF ROW(NEW.status, NEW.error) IS NOT DISTINCT FROM ROW(OLD.status, OLD.error) THEN RETURN NEW; END IF;
+    IF ROW(NEW.status, NEW.error, NEW.resolution) IS NOT DISTINCT FROM ROW(OLD.status, OLD.error, OLD.resolution) THEN RETURN NEW; END IF;
   END IF;
   INSERT INTO realtime_outbox(user_id, video_id, type, job_id, kind)
     VALUES (NEW.user_id, NEW.video_id, 'generation.changed', NEW.id, NEW.kind);

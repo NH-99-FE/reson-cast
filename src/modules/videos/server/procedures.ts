@@ -4,7 +4,7 @@ import { inArray } from 'drizzle-orm/sql/expressions/conditions'
 import { z } from 'zod'
 
 import { db } from '@/db'
-import { subscriptions, users, videoReactions, videos, videoUpdateSchema, videoViews } from '@/db/schema'
+import { subscriptions, users, videoReactions, videos, videoSaveSchema, videoViews } from '@/db/schema'
 import { mux } from '@/lib/mux'
 import { readyMuxSubtitle } from '@/lib/mux-subtitles'
 import { imagePath, muxToken } from '@/lib/video-media'
@@ -12,7 +12,7 @@ import { publicVideoCondition, readableVideoCondition, requireVideo, viewerId } 
 import { requestVideoDeletion } from '@/modules/videos/server/services/deletion'
 import { baseProcedure, createTRPCRouter, protectedProcedure } from '@/trpc/init'
 
-import { getGenerationJob, retryVideoGeneration, startVideoGeneration } from './services/generation'
+import { dismissGenerationResult, getGenerationJob, retryVideoGeneration, startVideoGeneration } from './services/generation'
 import { cleanupVideoFiles, pendingFileCleanup, restoreVideoThumbnail } from './services/thumbnails'
 import { resumePlaybackRevocation, updateVideo } from './services/update'
 
@@ -262,6 +262,9 @@ export const videosRouter = createTRPCRouter({
   retryGeneration: protectedProcedure
     .input(z.object({ jobId: z.uuid() }))
     .mutation(({ ctx, input }) => retryVideoGeneration(input.jobId, ctx.user.id)),
+  dismissGenerationResult: protectedProcedure
+    .input(z.object({ id: z.uuid(), kind: z.enum(['title', 'description']), jobId: z.uuid() }))
+    .mutation(({ ctx, input }) => dismissGenerationResult(input.id, ctx.user.id, input.kind, input.jobId)),
   generateThumbnail: protectedProcedure
     .input(z.object({ id: z.uuid(), prompt: z.string().trim().min(10).max(2000) }))
     .mutation(({ ctx, input }) => startVideoGeneration('thumbnail', input.id, ctx.user.id, input.prompt)),
@@ -356,7 +359,7 @@ export const videosRouter = createTRPCRouter({
     ])
     return { playbackId: video.muxPlaybackId, tokens: { playback, storyboard } }
   }),
-  update: protectedProcedure.input(videoUpdateSchema).mutation(({ ctx, input }) => updateVideo(input, ctx.user.id)),
+  update: protectedProcedure.input(videoSaveSchema).mutation(({ ctx, input }) => updateVideo(input, ctx.user.id)),
   create: protectedProcedure.mutation(async ({ ctx }) => {
     const { id: userId } = ctx.user
 

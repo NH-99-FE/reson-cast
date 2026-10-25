@@ -216,6 +216,7 @@ async function run() {
     state.failDetails = true
     state.video.title = 'Other page title'
     latestRun('title').status = 'conflict'
+    latestRun('title').resolution = 'pending'
     latestRun('title').result = 'Generated suggestion'
     send('generation.changed', 'title')
     await openRecovery('重试同步')
@@ -225,13 +226,71 @@ async function run() {
     button('重试同步').click()
     await wait(() => !title().disabled)
     check(title().value === 'Other page title' && button('保存').disabled, 'conflict did not refresh clean value')
-    button('查看未采用的标题生成结果').click()
+    button('查看待处理的标题生成结果').click()
     await wait(() => button('采用到编辑框'))
     button('采用到编辑框').click()
     await wait(() => title().value === 'Generated suggestion' && !button('保存').disabled)
     check(state.video.title === 'Other page title', 'adoption must not silently save')
+    check(latestRun('title').resolution === 'pending', 'filling the editor must not resolve the result')
+    edit(title(), 'Other page title')
+    await wait(() => !button('保存').disabled)
+    check(latestRun('title').resolution === 'pending', 'editing back to the baseline must not resolve adoption')
+    edit(title(), 'Generated suggestion with edits')
+    await wait(() => title().value === 'Generated suggestion with edits')
+    state.failSave = true
+    const writes = state.writes.length
+    button('保存').click()
+    await wait(() => state.writes.length > writes && !button('保存').disabled)
+    check(latestRun('title').resolution === 'pending', 'failed save must keep result pending')
+    check(button('查看待处理的标题生成结果'), 'failed save lost result access')
+    state.failSave = false
     button('保存').click()
     await wait(() => button('保存').disabled)
+    await wait(() => !button('查看待处理的标题生成结果'))
+    check(latestRun('title').status === 'conflict' && latestRun('title').resolution === 'adopted', 'save did not resolve adoption')
+    check(state.video.title === 'Generated suggestion with edits', 'save lost edits made after adoption')
+    await show()
+    check(!button('查看待处理的标题生成结果'), 'adopted result reappeared after remount')
+  })
+  await test('closing keeps pending results; failed dismissal can retry and successful dismissal survives remount', async () => {
+    button('AI 生成标题').click()
+    await wait(() => title().disabled)
+    Object.assign(latestRun('title'), { status: 'conflict', resolution: 'pending', result: 'Dismiss this result' })
+    send('generation.changed', 'title')
+    await wait(() => button('查看待处理的标题生成结果'))
+    button('查看待处理的标题生成结果').click()
+    await wait(() => button('关闭生成结果'))
+    button('关闭生成结果').click()
+    await wait(() => !button('忽略此结果'))
+    check(latestRun('title').resolution === 'pending', 'closing a preview dismissed its result')
+    const original = title().value
+    button('查看待处理的标题生成结果').click()
+    await wait(() => button('忽略此结果'))
+    state.failDismiss = true
+    button('忽略此结果').click()
+    await delay(100)
+    await wait(() => button('忽略此结果') && !button('忽略此结果').disabled)
+    check(latestRun('title').resolution === 'pending', 'failed dismissal resolved the result')
+    state.failDismiss = false
+    button('忽略此结果').click()
+    await wait(() => !button('查看待处理的标题生成结果'))
+    check(title().value === original && latestRun('title').resolution === 'dismissed', 'dismissal changed editor content')
+    await show()
+    check(!button('查看待处理的标题生成结果'), 'dismissed result reappeared after remount')
+  })
+  await test('adopting an identical saved value still enables a save to resolve it', async () => {
+    button('AI 生成简介').click()
+    await wait(() => desc().disabled)
+    Object.assign(latestRun('description'), { status: 'conflict', resolution: 'pending', result: state.video.description })
+    send('generation.changed', 'description')
+    await wait(() => button('查看待处理的简介生成结果'))
+    button('查看待处理的简介生成结果').click()
+    await wait(() => button('采用到编辑框'))
+    button('采用到编辑框').click()
+    await wait(() => !button('保存').disabled)
+    button('保存').click()
+    await wait(() => !button('查看待处理的简介生成结果'))
+    check(latestRun('description').resolution === 'adopted', 'identical result could not be resolved')
   })
   await test('leaving stops polling; returning restores a pending task then synchronizes completion', async () => {
     button('AI 生成标题').click()

@@ -31,7 +31,7 @@ before(async () => {
     thumbnail_key text, thumbnail_url text, preview_url text, duration integer,
     deletion_requested_at timestamp, deletion_run_id uuid, deletion_error text);
     CREATE TABLE video_generation_jobs(id uuid PRIMARY KEY, video_id uuid REFERENCES videos(id) ON DELETE CASCADE,
-    user_id uuid, kind text, status text, error text);`)
+    user_id uuid, kind text, status text, error text, resolution text);`)
   await pg.exec(await readFile(new URL('../scripts/sql/add-realtime-outbox.sql', import.meta.url), 'utf8'))
 })
 after(() => pg.close())
@@ -41,7 +41,13 @@ test('trigger writes atomically, ignores unchanged state, and rolls back busines
   await pg.exec("UPDATE videos SET mux_status='ready'; UPDATE videos SET mux_status='ready'")
   assert.equal((await pg.query<Record<string, unknown>>('SELECT * FROM realtime_outbox')).rows.length, 1)
   await pg.exec("ALTER TABLE realtime_outbox ADD CONSTRAINT simulated_failure CHECK (type <> 'generation.changed')")
-  await assert.rejects(pg.query("INSERT INTO video_generation_jobs VALUES ($1,$2,$3,'title','queued',NULL)", [job, video, owner]))
+  await assert.rejects(
+    pg.query("INSERT INTO video_generation_jobs(id,video_id,user_id,kind,status,error) VALUES ($1,$2,$3,'title','queued',NULL)", [
+      job,
+      video,
+      owner,
+    ])
+  )
   assert.equal((await pg.query<Record<string, unknown>>('SELECT * FROM video_generation_jobs')).rows.length, 0)
   await pg.exec('ALTER TABLE realtime_outbox DROP CONSTRAINT simulated_failure')
   await pg.exec('ALTER TABLE realtime_outbox ADD CONSTRAINT simulated_failure CHECK (video_id IS NULL) NOT VALID')
@@ -57,7 +63,11 @@ test('subtitle status uses the actual mixed-case database column and emits only 
 })
 test('generation transitions and submission errors emit once; deletion preserves pending events', async () => {
   await reset()
-  await pg.query("INSERT INTO video_generation_jobs VALUES ($1,$2,$3,'title','queued',NULL)", [job, video, owner])
+  await pg.query("INSERT INTO video_generation_jobs(id,video_id,user_id,kind,status,error) VALUES ($1,$2,$3,'title','queued',NULL)", [
+    job,
+    video,
+    owner,
+  ])
   await pg.exec(
     "UPDATE video_generation_jobs SET status='running'; UPDATE video_generation_jobs SET status='running'; UPDATE video_generation_jobs SET status='failed', error='error'"
   )
@@ -140,4 +150,16 @@ test('provider timeout and lost acknowledgement remain retryable; published data
   )
   assert.equal(failures.length, 2)
   assert.ok(retryDelay(20) <= 900)
+})
+
+test('resolution-only changes notify other sessions once without changing task status', async () => {
+  await reset()
+  await pg.query(
+    "INSERT INTO video_generation_jobs(id,video_id,user_id,kind,status,resolution) VALUES ($1,$2,$3,'title','conflict','pending')",
+    [job, video, owner]
+  )
+  await pg.exec('TRUNCATE realtime_outbox')
+  await pg.exec("UPDATE video_generation_jobs SET resolution='adopted'; UPDATE video_generation_jobs SET resolution='adopted'")
+  assert.deepEqual((await pg.query('SELECT type,job_id FROM realtime_outbox')).rows, [{ type: 'generation.changed', job_id: job }])
+  assert.equal((await pg.query<{ status: string }>('SELECT status FROM video_generation_jobs')).rows[0].status, 'conflict')
 })

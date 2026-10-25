@@ -28,6 +28,8 @@ export const state = {
   failDetails: false,
   failPolls: false,
   saveDelay: 0,
+  failSave: false,
+  failDismiss: false,
   dispatchFails: false,
   dispatchQueued: false,
   delayNextStatus: false,
@@ -83,6 +85,7 @@ const handle = async ({ path, input }) => {
       status: state.dispatchFails || state.dispatchQueued ? 'queued' : 'running',
       account: state.account,
       result: null,
+      resolution: null,
       error: state.dispatchFails ? '任务提交未确认，可重新提交' : null,
       videoId,
       createdAt: new Date(),
@@ -102,8 +105,26 @@ const handle = async ({ path, input }) => {
   if (path === 'videos.update') {
     state.writes.push(input)
     await delay(state.saveDelay)
-    Object.assign(state.video, input)
+    if (state.failSave) throw new Error('模拟保存失败')
+    const { adoptedGenerationJobs, ...values } = input
+    for (const [kind, id] of Object.entries(adoptedGenerationJobs ?? {})) {
+      if (!id) continue
+      const job = state.runs[id]
+      if (!job || job.kind !== kind || job.resolution === 'dismissed') throw new Error('生成结果已被处理')
+    }
+    Object.assign(state.video, values)
+    for (const id of Object.values(adoptedGenerationJobs ?? {})) {
+      if (!id) continue
+      state.runs[id].resolution = 'adopted'
+    }
     return { ...state.video }
+  }
+  if (path === 'videos.dismissGenerationResult') {
+    if (state.failDismiss) throw new Error('模拟忽略失败')
+    const job = state.runs[input.jobId]
+    if (!job || job.resolution === 'adopted') throw new Error('生成结果已被处理')
+    job.resolution = 'dismissed'
+    return { ...job }
   }
   throw new Error(`Unexpected mock RPC: ${path}`)
 }
