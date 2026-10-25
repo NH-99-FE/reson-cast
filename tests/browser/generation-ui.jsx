@@ -225,6 +225,8 @@ async function run() {
     button('重试同步').click()
     await wait(() => !title().disabled)
     check(title().value === 'Other page title' && button('保存').disabled, 'conflict did not refresh clean value')
+    button('查看未采用的标题生成结果').click()
+    await wait(() => button('采用到编辑框'))
     button('采用到编辑框').click()
     await wait(() => title().value === 'Generated suggestion' && !button('保存').disabled)
     check(state.video.title === 'Other page title', 'adoption must not silently save')

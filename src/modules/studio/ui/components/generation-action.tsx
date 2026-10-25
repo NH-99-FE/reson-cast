@@ -52,6 +52,7 @@ export function GenerationAction({
   const retryLabel = task.retryLabel ?? (dispatchUnconfirmed ? '重新提交' : '重新生成')
   const blocked = disabled || task.locked
   const hint =
+    (disabled && !task.locked && !needsRecovery ? disabledReason : null) ??
     task.message ??
     (failed ? task.job?.error || `${label}生成失败` : task.loading ? '正在查询生成进度' : blocked ? disabledReason : `AI 生成${label}`)
   const icon =

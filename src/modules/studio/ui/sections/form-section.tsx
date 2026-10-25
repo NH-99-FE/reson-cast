@@ -38,6 +38,7 @@ import { videoUpdateSchema } from '@/db/schema'
 import { formatVideoStatus } from '@/lib/utils'
 import { cardThumbnailSource, isPublicThumbnail, videoThumbnailSource } from '@/lib/video-image-source'
 import { GenerationAction } from '@/modules/studio/ui/components/generation-action'
+import { GenerationSuggestion } from '@/modules/studio/ui/components/generation-suggestion'
 import { ThumbnailGenerateModal } from '@/modules/studio/ui/components/thumbnail-generate-modal'
 import { ThumbnailUploadModal } from '@/modules/studio/ui/components/thumbnail-upload-modal'
 import { useGenerationTask } from '@/modules/studio/ui/hooks/use-generation-task'
@@ -359,34 +360,29 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                 name="title"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>
+                    <div className="flex h-6 items-center justify-between gap-2">
                       <div className="flex items-center gap-x-2">
-                        标题
+                        <FormLabel>标题</FormLabel>
                         <GenerationAction
                           label="标题"
                           task={titleGeneration}
                           disabled={update.isPending || !!form.formState.dirtyFields.title || !video.muxTrackId}
                           disabledReason={
-                            form.formState.dirtyFields.title ? '请先保存该字段' : !video.muxTrackId ? '视频字幕尚未就绪' : '正在保存'
+                            form.formState.dirtyFields.title ? '请先保存标题，再生成' : !video.muxTrackId ? '视频字幕尚未就绪' : '正在保存'
                           }
                         />
                       </div>
-                    </FormLabel>
+                      {titleGeneration.suggestion && !titleGeneration.locked && (
+                        <GenerationSuggestion
+                          label="标题"
+                          suggestion={titleGeneration.suggestion}
+                          onAdopt={titleGeneration.adoptSuggestion}
+                        />
+                      )}
+                    </div>
                     <FormControl>
                       <Input {...field} disabled={titleGeneration.fieldLocked} placeholder="在此添加视频标题" />
                     </FormControl>
-                    {titleGeneration.suggestion && !titleGeneration.locked && (
-                      <details className="text-sm">
-                        <summary>查看未采用的生成结果</summary>
-                        <p className="my-2 whitespace-pre-wrap">{titleGeneration.suggestion}</p>
-                        <Button type="button" size="sm" variant="outline" onClick={titleGeneration.adoptSuggestion}>
-                          采用到编辑框
-                        </Button>
-                      </details>
-                    )}
-                    {form.formState.dirtyFields.title && !titleGeneration.locked && (
-                      <p className="text-xs text-muted-foreground">请先保存该字段，再生成</p>
-                    )}
                   </FormItem>
                 )}
               />
@@ -396,42 +392,40 @@ const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>
+                    <div className="flex h-6 items-center justify-between gap-2">
                       <div className="flex items-center gap-x-2">
-                        简介
+                        <FormLabel>简介</FormLabel>
                         <GenerationAction
                           label="简介"
                           task={descriptionGeneration}
                           disabled={update.isPending || !!form.formState.dirtyFields.description || !video.muxTrackId}
                           disabledReason={
-                            form.formState.dirtyFields.description ? '请先保存该字段' : !video.muxTrackId ? '视频字幕尚未就绪' : '正在保存'
+                            form.formState.dirtyFields.description
+                              ? '请先保存简介，再生成'
+                              : !video.muxTrackId
+                                ? '视频字幕尚未就绪'
+                                : '正在保存'
                           }
                         />
                       </div>
-                    </FormLabel>
+                      {descriptionGeneration.suggestion && !descriptionGeneration.locked && (
+                        <GenerationSuggestion
+                          label="简介"
+                          suggestion={descriptionGeneration.suggestion}
+                          onAdopt={descriptionGeneration.adoptSuggestion}
+                        />
+                      )}
+                    </div>
                     <FormControl>
                       <Textarea
                         {...field}
                         disabled={descriptionGeneration.fieldLocked}
                         value={field.value ?? ''}
-                        rows={10}
                         placeholder="在此添加视频介绍"
-                        className="min-h-40 resize-none pr-10"
+                        className="field-sizing-fixed h-40 resize-none pr-10"
                       />
                     </FormControl>
                     <FormMessage />
-                    {descriptionGeneration.suggestion && !descriptionGeneration.locked && (
-                      <details className="text-sm">
-                        <summary>查看未采用的生成结果</summary>
-                        <p className="my-2 whitespace-pre-wrap">{descriptionGeneration.suggestion}</p>
-                        <Button type="button" size="sm" variant="outline" onClick={descriptionGeneration.adoptSuggestion}>
-                          采用到编辑框
-                        </Button>
-                      </details>
-                    )}
-                    {form.formState.dirtyFields.description && !descriptionGeneration.locked && (
-                      <p className="text-xs text-muted-foreground">请先保存该字段，再生成</p>
-                    )}
                   </FormItem>
                 )}
               />
